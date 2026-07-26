@@ -1,0 +1,33 @@
+# Build output
+/build/
+build/
+debug/
+release/
+*.o
+*.obj
+*.exe
+*.dll
+*.a
+
+# qmake / moc / uic generated
+Makefile
+Makefile.*
+.qmake.stash
+moc_*.cpp
+moc_*.h
+moc_predefs.h
+qrc_*.cpp
+ui_*.h
+object_script.*
+
+# Qt Creator / IDE
+.qtcreator/
+*.pro.user
+*.pro.user.*
+*.autosave
+.vscode/
+.idea/
+
+# OS junk
+Thumbs.db
+.DS_Store
