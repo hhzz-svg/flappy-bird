@@ -124,3 +124,24 @@
 - `docs/deployment.md`：修正 GitHub Pages 历史版本回滚操作。
 - `progress.md`：追加修正与验证记录。
 - 回滚方式：执行 `git revert (git log --grep='^docs: correct Pages rollback instructions$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 发布并验证 Qt WebAssembly GitHub Pages
+
+### What was done
+
+- GitHub Pages 已启用 GitHub Actions 发布源。
+- Qt WebAssembly 版已发布到根地址，HTML 增强版保留在备用地址。
+
+### Testing
+
+- GitHub Actions 构建与部署成功：https://github.com/hhzz-svg/flappy-bird/actions/runs/30203319047。
+- 根页面、备用页面、JavaScript 运行时和 WASM 资源均返回 HTTP 200，WASM MIME 类型为 `application/wasm`。
+- Playwright 真实浏览器验证通过：Qt 菜单可见，键盘输入可开始游戏，画面和障碍持续更新；实际游玩生成最高分 19、金币 8，刷新后 localStorage 与菜单仍显示相同数据。
+- HTML 增强版加载成功且浏览器控制台无错误。
+
+### Notes
+
+- `progress.md`：追加线上发布与验收证据。
+- GitHub Pages 设置：构建来源设为 GitHub Actions。
+- 关注项：Qt 页面加载时 `qtlogo.svg` 与站点 `favicon.ico` 返回 404，不影响游戏初始化和交互；Qt 画布内部分中文与 emoji 字形缺失。
+- 回滚方式：执行 `git revert (git log --grep='^ci: deploy Qt WebAssembly to GitHub Pages$' -1 --format='%H')` 后推送 `main`，或按 `docs/deployment.md` 从最后一个可用提交手动发布。
