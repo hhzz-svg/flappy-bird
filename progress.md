@@ -208,3 +208,24 @@
 - `docs/deployment.md`：补充字体许可、构建隔离和图标 staging 说明。
 - `progress.md`：追加本轮实现与验证记录。
 - 回滚方式：执行 `git revert (git log --grep='^fix: make Qt WASM UI readable$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 删除内部设计与实施计划文档
+
+### What was done
+
+- 删除 `docs/superpowers/` 下四份内部设计与实施计划文档。
+- 保留正式部署说明、字体许可证、运行代码和历史进度记录。
+
+### Testing
+
+- 已确认 `docs/superpowers/` 下不再存在已跟踪文件。
+- `git diff --check` 通过。
+
+### Notes
+
+- `docs/superpowers/specs/2026-07-26-qt-webassembly-pages-design.md`：删除初始部署设计。
+- `docs/superpowers/specs/2026-07-26-qt-wasm-readability-evidence-design.md`：删除可读性修复设计。
+- `docs/superpowers/plans/2026-07-26-qt-webassembly-pages.md`：删除初始部署实施计划。
+- `docs/superpowers/plans/2026-07-26-qt-wasm-readability-evidence.md`：删除可读性修复实施计划。
+- `progress.md`：追加删除范围、验证和回滚记录。
+- 回滚方式：执行 `git revert (git log --grep='^docs: remove internal planning documents$' -1 --format='%H')`。
