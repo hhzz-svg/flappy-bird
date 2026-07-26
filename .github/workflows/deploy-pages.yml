@@ -1,0 +1,83 @@
+name: Deploy Qt WebAssembly to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "3.1.56"
+          actions-cache-folder: emsdk-cache
+
+      - name: Install Qt for WebAssembly
+        run: |
+          python -m pip install "aqtinstall==3.3.0"
+          aqt install-qt all_os wasm 6.8.3 wasm_singlethread \
+            --autodesktop \
+            --outputdir "$RUNNER_TEMP/Qt"
+
+      - name: Build Qt WebAssembly application
+        run: |
+          mkdir build-wasm
+          cd build-wasm
+          "$RUNNER_TEMP/Qt/6.8.3/wasm_singlethread/bin/qmake" \
+            ../FlappyBird.pro CONFIG+=release
+          make -j2
+
+      - name: Stage and validate site
+        run: |
+          mkdir site
+          cp build-wasm/FlappyBird.html site/index.html
+          find build-wasm -maxdepth 1 -type f \
+            \( -name '*.js' -o -name '*.wasm' \) \
+            -exec cp '{}' site/ \;
+          cp flappy-bird-enhanced.html site/enhanced.html
+          touch site/.nojekyll
+          test -s site/index.html
+          test -s site/FlappyBird.js
+          test -s site/FlappyBird.wasm
+          test -s site/qtloader.js
+          test -s site/enhanced.html
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

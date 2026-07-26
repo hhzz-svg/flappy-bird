@@ -70,3 +70,21 @@
 - `main.cpp`：增加 WASM 专用的 QSettings 默认格式。
 - `progress.md`：追加实现与验证记录。
 - 回滚方式：执行 `git revert (git log --grep='^feat: persist WASM game settings in browser$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 增加 Qt WebAssembly Pages 工作流
+
+### What was done
+
+- 增加固定版本的 Qt WebAssembly 自动构建。
+- 增加完整产物检查和 GitHub Pages 部署，保留 HTML 增强版备用入口。
+
+### Testing
+
+- 工作流关键版本、权限、Pages actions 和产物断言通过。
+- `git diff --check` 通过；线上构建结果在发布任务中继续验证。
+
+### Notes
+
+- `.github/workflows/deploy-pages.yml`：新增 WASM 构建、产物验证与 Pages 部署。
+- `progress.md`：追加实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^ci: deploy Qt WebAssembly to GitHub Pages$' -1 --format='%H')`。
