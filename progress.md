@@ -17,3 +17,21 @@
 - `docs/superpowers/specs/2026-07-26-qt-webassembly-pages-design.md`：新增经用户确认的部署设计。
 - `progress.md`：追加本轮设计落档与验证记录。
 - 回滚方式：对本轮设计提交执行 `git revert HEAD`。
+
+## 2026-07-26 - Task: 编写 Qt WebAssembly Pages 实施计划
+
+### What was done
+
+- 将已确认设计拆成浏览器存档、Pages 工作流、部署文档和线上验收四个闭环任务。
+- 为每项改动明确文件、完整代码、验证命令、提交点和回滚方式。
+
+### Testing
+
+- 已逐项核对计划覆盖设计中的工具链、根入口、备用页面、存档、失败保护和验收要求。
+- 已执行禁止占位符扫描与 `git diff --check`，均通过。
+
+### Notes
+
+- `docs/superpowers/plans/2026-07-26-qt-webassembly-pages.md`：新增可执行实施计划。
+- `progress.md`：追加本轮计划落档与自检记录。
+- 回滚方式：执行 `git revert (git log --grep='^docs: plan Qt WebAssembly Pages implementation$' -1 --format='%H')`。
