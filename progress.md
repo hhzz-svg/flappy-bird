@@ -163,3 +163,21 @@
 - `docs/superpowers/specs/2026-07-26-qt-wasm-readability-evidence-design.md`：新增经用户批准的修复设计。
 - `progress.md`：追加设计落档记录。
 - 回滚方式：执行 `git revert (git log --grep='^docs: design Qt WASM readability and evidence fix$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 编写 Qt WebAssembly 可读性修复计划
+
+### What was done
+
+- 将字体子集、加载资源、生产全界面验收和持久证据拆成四个可独立验证的施工任务。
+- 为每项改动明确先失败断言、最小实现、验证命令、提交边界和最终回滚点。
+
+### Testing
+
+- 计划逐项覆盖已批准设计中的字体许可、WASM 条件隔离、桌面构建、Pages 失败保护、浏览器状态矩阵和证据清理。
+- 计划已通过占位符、接口名称、文件路径和范围一致性检查。
+
+### Notes
+
+- `docs/superpowers/plans/2026-07-26-qt-wasm-readability-evidence.md`：新增可执行施工计划。
+- `progress.md`：追加计划落档记录。
+- 回滚方式：执行 `git revert (git log --grep='^docs: plan Qt WASM readability and evidence fix$' -1 --format='%H')`。
