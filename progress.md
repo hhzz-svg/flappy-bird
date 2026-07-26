@@ -35,3 +35,20 @@
 - `docs/superpowers/plans/2026-07-26-qt-webassembly-pages.md`：新增可执行实施计划。
 - `progress.md`：追加本轮计划落档与自检记录。
 - 回滚方式：执行 `git revert (git log --grep='^docs: plan Qt WebAssembly Pages implementation$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 准备隔离施工工作区
+
+### What was done
+
+- 将项目内 `.worktrees/` 目录加入 Git 忽略规则，为 Qt WebAssembly 部署施工创建隔离工作区。
+
+### Testing
+
+- `git check-ignore .worktrees/qt-wasm-pages` 返回匹配，确认隔离工作区不会进入版本控制。
+- `git diff --check` 通过。
+
+### Notes
+
+- `.gitignore`：忽略项目内 Git worktree 目录。
+- `progress.md`：追加隔离工作区准备记录。
+- 回滚方式：执行 `git revert (git log --grep='^chore: ignore local worktrees$' -1 --format='%H')`。

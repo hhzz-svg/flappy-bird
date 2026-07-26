@@ -27,6 +27,7 @@ object_script.*
 *.autosave
 .vscode/
 .idea/
+.worktrees/
 
 # OS junk
 Thumbs.db
