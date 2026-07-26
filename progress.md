@@ -107,3 +107,20 @@
 - `docs/deployment.md`：新增部署和本地构建说明。
 - `progress.md`：追加实现与验证记录。
 - 回滚方式：执行 `git revert (git log --grep='^docs: add Qt WebAssembly play and deployment guide$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 修正 Pages 回滚说明
+
+### What was done
+
+- 将历史版本发布说明改为从已知可用提交创建或选择分支后手动运行工作流。
+
+### Testing
+
+- README 在线地址、部署文档引用和固定工具链断言通过。
+- `git diff --check` 通过。
+
+### Notes
+
+- `docs/deployment.md`：修正 GitHub Pages 历史版本回滚操作。
+- `progress.md`：追加修正与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^docs: correct Pages rollback instructions$' -1 --format='%H')`。
