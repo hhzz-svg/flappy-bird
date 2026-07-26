@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/fonts">
+        <file alias="NotoSansSC-UI-Subset.otf">assets/fonts/NotoSansSC-UI-Subset.otf</file>
+    </qresource>
+</RCC>

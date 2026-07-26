@@ -1,5 +1,6 @@
 #include "gamewidget.h"
 
+#include <QApplication>
 #include <QPainter>
 #include <QPainterPath>
 #include <QLinearGradient>
@@ -43,12 +44,12 @@ const QVector<GameMode> &GameWidget::modes()
 {
     static const QVector<GameMode> m = {
         //           id          name    icon   desc                                   accent               grav  jump  gap  spd  spawn mul  ramp  move  fog   storm laser rate
-        { QStringLiteral("classic"), QStringLiteral("经典"),  QStringLiteral("🐤"),  QStringLiteral("原汁原味，稳定难度"),      QColor(255,217, 61), 0.42,-7.4,168,2.60,1600,1.0,0.6, false,false,false,false,0.50 },
-        { QStringLiteral("zen"),     QStringLiteral("禅意"),  QStringLiteral("🍃"),  QStringLiteral("宽间距 · 慢节奏 · 放松练习"), QColor(126,232,176),0.34,-6.7,214,2.05,2100,1.0,0.0, false,false,false,false,0.65 },
-        { QStringLiteral("turbo"),   QStringLiteral("极速"),  QStringLiteral("🔥"),  QStringLiteral("越来越快 · 得分 ×2"),        QColor(255,107, 61), 0.50,-8.1,182,3.50,1350,2.0,1.4, false,false,false,false,0.50 },
-        { QStringLiteral("night"),   QStringLiteral("夜航"),  QStringLiteral("🌙"),  QStringLiteral("视野受限 · 只有身边看得见"),   QColor(127,211,255),0.42,-7.4,182,2.55,1600,1.5,0.5, false,true, false,false,0.55 },
-        { QStringLiteral("storm"),   QStringLiteral("风暴"),  QStringLiteral("⛈"), QStringLiteral("管道晃动 · 阵风来袭 · 闪电"), QColor(197,139,255),0.44,-7.6,190,2.75,1650,1.8,0.7, true, false,true, false,0.50 },
-        { QStringLiteral("laser"),   QStringLiteral("激光"),  QStringLiteral("⚡"),  QStringLiteral("移动激光门 · 抓准间隙"),      QColor(255, 80,120), 0.40,-7.3,176,2.50,1750,2.0,0.5, false,false,false,true, 0.55 },
+        { QStringLiteral("classic"), QStringLiteral("经典"),  QStringLiteral("鸟"), QStringLiteral("原汁原味，稳定难度"),      QColor(255,217, 61), 0.42,-7.4,168,2.60,1600,1.0,0.6, false,false,false,false,0.50 },
+        { QStringLiteral("zen"),     QStringLiteral("禅意"),  QStringLiteral("禅"), QStringLiteral("宽间距 · 慢节奏 · 放松练习"), QColor(126,232,176),0.34,-6.7,214,2.05,2100,1.0,0.0, false,false,false,false,0.65 },
+        { QStringLiteral("turbo"),   QStringLiteral("极速"),  QStringLiteral("速"), QStringLiteral("越来越快 · 得分 ×2"),        QColor(255,107, 61), 0.50,-8.1,182,3.50,1350,2.0,1.4, false,false,false,false,0.50 },
+        { QStringLiteral("night"),   QStringLiteral("夜航"),  QStringLiteral("夜"), QStringLiteral("视野受限 · 只有身边看得见"),   QColor(127,211,255),0.42,-7.4,182,2.55,1600,1.5,0.5, false,true, false,false,0.55 },
+        { QStringLiteral("storm"),   QStringLiteral("风暴"),  QStringLiteral("风"), QStringLiteral("管道晃动 · 阵风来袭 · 闪电"), QColor(197,139,255),0.44,-7.6,190,2.75,1650,1.8,0.7, true, false,true, false,0.50 },
+        { QStringLiteral("laser"),   QStringLiteral("激光"),  QStringLiteral("光"), QStringLiteral("移动激光门 · 抓准间隙"),      QColor(255, 80,120), 0.40,-7.3,176,2.50,1750,2.0,0.5, false,false,false,true, 0.55 },
     };
     return m;
 }
@@ -610,10 +611,21 @@ QRectF GameWidget::pauseMenuRect() const       { return QRectF(LW / 2.0 - 90, LH
 // ==========================================================================
 //  painting
 // ==========================================================================
+static QFont uiFont(bool black = false)
+{
+#ifdef Q_OS_WASM
+    QFont font = QApplication::font();
+    font.setWeight(black ? QFont::Black : QFont::DemiBold);
+    return font;
+#else
+    return QFont(QStringLiteral("Arial"), 10, black ? QFont::Black : QFont::DemiBold);
+#endif
+}
+
 void GameWidget::label(QPainter &p, const QRectF &r, const QString &t, int size,
                        QColor col, int flags, bool black, int shadow, qreal alpha)
 {
-    QFont f(QStringLiteral("Arial"), 10, black ? QFont::Black : QFont::DemiBold);
+    QFont f = uiFont(black);
     f.setPixelSize(size);
     p.setFont(f);
     if (shadow > 0) {
@@ -835,7 +847,7 @@ void GameWidget::drawCoins(QPainter &p)
         p.setPen(Qt::NoPen);
         if (wob > 0.4) {
             p.setPen(QColor(168, 110, 8));
-            QFont f(QStringLiteral("Arial")); f.setPixelSize(11); f.setBold(true);
+            QFont f = uiFont(); f.setPixelSize(11); f.setBold(true);
             p.setFont(f);
             p.drawText(QRectF(-8, -8, 16, 16), Qt::AlignCenter, QStringLiteral("★"));
             p.setPen(Qt::NoPen);
@@ -1015,7 +1027,7 @@ void GameWidget::drawHUD(QPainter &p)
     if (mode().storm && (m_gustWarn > 0 || m_gustActive)) {
         QString t; QColor col;
         if (m_gustActive) { t = m_gustDir < 0 ? QStringLiteral("↑ 上升气流") : QStringLiteral("↓ 下沉气流"); col = QColor(197,139,255); }
-        else { t = QStringLiteral("⚠ 阵风来袭"); col = QColor(255,217,61); }
+        else { t = QStringLiteral("注意：阵风来袭"); col = QColor(255,217,61); }
         const qreal a = m_gustActive ? 1.0 : (0.4 + 0.6 * qAbs(qSin(m_tGlobal * 12)));
         label(p, QRectF(0, 104, LW, 28), t, 15, col, Qt::AlignHCenter, true, 8, a);
     }
@@ -1086,7 +1098,7 @@ void GameWidget::drawMenu(QPainter &p)
     p.setPen(QPen(QColor(255, 226, 122, 200), 2));
     p.setBrush(Qt::NoBrush);
     p.drawRoundedRect(sb, 14, 14);
-    label(p, sb, QStringLiteral("🛒  皮肤商店"), 18, QColor(255, 226, 122), Qt::AlignCenter, true, 4);
+    label(p, sb, QStringLiteral("皮肤商店"), 18, QColor(255, 226, 122), Qt::AlignCenter, true, 4);
 
     const qreal a = 0.5 + 0.5 * qSin(m_tGlobal * 4);
     label(p, QRectF(0, 612, LW, 20), QStringLiteral("↑↓ 选择 · 回车开始 · B 进商店 · 点击卡片直接玩"),
@@ -1148,7 +1160,7 @@ void GameWidget::drawShop(QPainter &p)
 void GameWidget::drawPaused(QPainter &p)
 {
     p.fillRect(QRectF(0, 0, LW, LH), QColor(0, 0, 0, 140));
-    label(p, QRectF(0, LH / 2.0 - 84, LW, 44), QStringLiteral("⏸ 暂停"), 34,
+    label(p, QRectF(0, LH / 2.0 - 84, LW, 44), QStringLiteral("暂停"), 34,
           QColor(255, 255, 255), Qt::AlignHCenter, true, 10);
 
     const QRectF rr = pauseResumeRect(), rm = pauseMenuRect();
@@ -1176,11 +1188,11 @@ void GameWidget::drawGameOver(QPainter &p)
           QColor(255, 122, 122), Qt::AlignHCenter, true, 8);
 
     QString medal; QColor mc;
-    if      (m_score >= 40) { medal = QStringLiteral("🏅 大师"); mc = QColor(127, 211, 255); }
-    else if (m_score >= 25) { medal = QStringLiteral("🥇 金牌"); mc = QColor(255, 217, 61); }
-    else if (m_score >= 12) { medal = QStringLiteral("🥈 银牌"); mc = QColor(223, 230, 240); }
-    else if (m_score >= 5)  { medal = QStringLiteral("🥉 铜牌"); mc = QColor(217, 160, 102); }
-    else                    { medal = QStringLiteral("🐣 新手"); mc = QColor(190, 205, 220); }
+    if      (m_score >= 40) { medal = QStringLiteral("大师"); mc = QColor(127, 211, 255); }
+    else if (m_score >= 25) { medal = QStringLiteral("金牌"); mc = QColor(255, 217, 61); }
+    else if (m_score >= 12) { medal = QStringLiteral("银牌"); mc = QColor(223, 230, 240); }
+    else if (m_score >= 5)  { medal = QStringLiteral("铜牌"); mc = QColor(217, 160, 102); }
+    else                    { medal = QStringLiteral("新手"); mc = QColor(190, 205, 220); }
     label(p, QRectF(bx, by + 62, bw, 34), medal, 22, mc, Qt::AlignHCenter, true, 6);
 
     auto stat = [&](qreal cxp, qreal yy, const QString &lab, const QString &val, QColor col) {
@@ -1197,7 +1209,7 @@ void GameWidget::drawGameOver(QPainter &p)
 
     if (m_newRecord) {
         const qreal a = 0.6 + 0.4 * qSin(m_tGlobal * 8);
-        label(p, QRectF(bx, by + 232, bw, 24), QStringLiteral("🎉 新纪录！"), 16,
+        label(p, QRectF(bx, by + 232, bw, 24), QStringLiteral("新纪录！"), 16,
               QColor(255, 217, 61), Qt::AlignHCenter, true, 6, a);
     }
 

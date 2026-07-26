@@ -36,6 +36,17 @@ make -j2
 Qt WebAssembly 版使用当前站点的 `localStorage` 保存最高分、金币和皮肤。清除该站点
 的浏览器数据会同时清除游戏进度；禁用站点存储时，刷新后不保证保留进度。
 
+## WebAssembly 界面字体与图标
+
+Qt WebAssembly 版通过 Qt 资源系统嵌入界面实际需要的 Noto Sans CJK SC 字形子集，
+解决浏览器环境没有中文系统字体时的缺字问题。子集仅在 WebAssembly 构建中注册，
+桌面版继续使用原有字体路径。字体来源、源文件校验值、子集命令和 SIL Open Font
+License 1.1 全文见 [`assets/fonts/SOURCE.md`](../assets/fonts/SOURCE.md) 与
+[`assets/fonts/OFL.txt`](../assets/fonts/OFL.txt)。
+
+Pages 产物同时包含项目自有的 `qtlogo.svg`、`favicon.svg` 和 `favicon.ico`；
+工作流会在上传前检查文件并向 Qt 生成的首页注入 favicon 引用。
+
 ## 回滚
 
 撤销引入问题的提交并推送到 `main`，Pages 工作流会重新发布回滚后的版本。若需要发布

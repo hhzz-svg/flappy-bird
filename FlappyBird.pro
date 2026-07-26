@@ -10,3 +10,8 @@ SOURCES += \
 
 HEADERS += \
     gamewidget.h
+
+wasm {
+    RESOURCES += \
+        resources.qrc
+}

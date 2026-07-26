@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Flappy Bird">
+  <circle cx="80" cy="80" r="76" fill="#51afe5"/>
+  <circle cx="72" cy="82" r="42" fill="#ffd93d"/>
+  <path d="M36 83 12 67l7 25-7 22 27-15z" fill="#e5ad22"/>
+  <path d="m112 73 34 14-34 14z" fill="#f26d3d"/>
+  <ellipse cx="72" cy="92" rx="28" ry="18" fill="#d8a91f" transform="rotate(-22 72 92)"/>
+  <circle cx="91" cy="65" r="13" fill="#fff"/>
+  <circle cx="96" cy="64" r="6" fill="#1f2438"/>
+  <circle cx="98" cy="62" r="2" fill="#fff"/>
+</svg>

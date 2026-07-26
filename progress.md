@@ -181,3 +181,30 @@
 - `docs/superpowers/plans/2026-07-26-qt-wasm-readability-evidence.md`：新增可执行施工计划。
 - `progress.md`：追加计划落档记录。
 - 回滚方式：执行 `git revert (git log --grep='^docs: plan Qt WASM readability and evidence fix$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 修复 Qt WebAssembly 中文字形与加载资源
+
+### What was done
+
+- 使用官方 Noto Sans CJK SC `Sans2.004` 生成 115436 字节的 OFL 界面字形子集，记录来源、源文件与子集校验值、许可全文和可复现命令。
+- 字体仅在 WebAssembly 构建中嵌入、注册和用于游戏文字；桌面版继续使用原有 Arial 路径。
+- 将不受支持的装饰性 emoji 改成可读中文，为 Pages 增加项目自有加载 SVG、SVG/ICO favicon、首页引用注入和失败保护。
+
+### Testing
+
+- 字体/资源静态断言完成红绿验证：首次因缺少字体、加载 SVG 和 ICO 分别失败，实现后全部通过。
+- fontTools cmap 检查通过：221 个请求字符与源码中 188 个 `QStringLiteral` 字符全部存在于子集。
+- OFL 全文逐行比对官方 `Sans2.004` 许可通过；ICO 包含 64、32、16 像素三种尺寸。
+- Qt 6.11.1 MinGW 桌面 Release 构建通过，生成 `build/desktop-pages-fontfix-ascii/release/FlappyBird.exe`。
+- `git diff --check` 通过；线上 WASM 构建、全界面字体和资源 404 在后续部署任务验证。
+
+### Notes
+
+- `.github/workflows/deploy-pages.yml`：阶段化加载图标与 favicon，注入首页引用并增加产物断言。
+- `FlappyBird.pro`、`resources.qrc`、`main.cpp`、`gamewidget.cpp`：增加 WASM 专用字体资源、注册与文本选择，替换不受支持的装饰性 emoji。
+- `assets/fonts/NotoSansSC-UI-Subset.otf`、`assets/fonts/OFL.txt`、`assets/fonts/SOURCE.md`、`assets/fonts/subset-glyphs.txt`：增加字体子集、许可、来源和字形清单。
+- `assets/qtlogo.svg`、`assets/favicon.svg`、`assets/favicon.ico`：增加项目自有加载与站点图标。
+- `tools/verify-wasm-ui.ps1`：增加可重复执行的字体、符号、资源和工作流静态验证。
+- `docs/deployment.md`：补充字体许可、构建隔离和图标 staging 说明。
+- `progress.md`：追加本轮实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^fix: make Qt WASM UI readable$' -1 --format='%H')`。

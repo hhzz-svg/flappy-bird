@@ -56,12 +56,31 @@ jobs:
             \( -name '*.js' -o -name '*.wasm' \) \
             -exec cp '{}' site/ \;
           cp flappy-bird-enhanced.html site/enhanced.html
+          cp assets/qtlogo.svg site/qtlogo.svg
+          cp assets/favicon.svg site/favicon.svg
+          cp assets/favicon.ico site/favicon.ico
+          python - <<'PY'
+          from pathlib import Path
+
+          index = Path("site/index.html")
+          html = index.read_text(encoding="utf-8")
+          favicon = '    <link rel="icon" href="favicon.svg" type="image/svg+xml">\n'
+          if favicon not in html:
+              if "</head>" not in html:
+                  raise SystemExit("Generated Qt HTML has no closing head tag")
+              html = html.replace("</head>", favicon + "</head>", 1)
+              index.write_text(html, encoding="utf-8")
+          PY
           touch site/.nojekyll
           test -s site/index.html
           test -s site/FlappyBird.js
           test -s site/FlappyBird.wasm
           test -s site/qtloader.js
           test -s site/enhanced.html
+          test -s site/qtlogo.svg
+          test -s site/favicon.svg
+          test -s site/favicon.ico
+          grep -F 'rel="icon" href="favicon.svg" type="image/svg+xml"' site/index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
