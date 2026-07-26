@@ -145,3 +145,21 @@
 - GitHub Pages 设置：构建来源设为 GitHub Actions。
 - 关注项：Qt 页面加载时 `qtlogo.svg` 与站点 `favicon.ico` 返回 404，不影响游戏初始化和交互；Qt 画布内部分中文与 emoji 字形缺失。
 - 回滚方式：执行 `git revert (git log --grep='^ci: deploy Qt WebAssembly to GitHub Pages$' -1 --format='%H')` 后推送 `main`，或按 `docs/deployment.md` 从最后一个可用提交手动发布。
+
+## 2026-07-26 - Task: 设计 Qt WebAssembly 可读性与证据修复
+
+### What was done
+
+- 明确采用 OFL 授权的 Noto Sans CJK SC 最小字形子集，仅在 WebAssembly 版注册和使用。
+- 明确用可读中文替换不受支持的装饰性 emoji，并补齐加载 SVG、favicon 与持久化生产证据。
+
+### Testing
+
+- 设计已覆盖字体许可与来源、桌面行为隔离、Pages 产物失败保护、全界面浏览器验收和证据落点。
+- 已检查设计没有 `TBD`、`TODO`、范围矛盾或未定义回滚方式。
+
+### Notes
+
+- `docs/superpowers/specs/2026-07-26-qt-wasm-readability-evidence-design.md`：新增经用户批准的修复设计。
+- `progress.md`：追加设计落档记录。
+- 回滚方式：执行 `git revert (git log --grep='^docs: design Qt WASM readability and evidence fix$' -1 --format='%H')`。
