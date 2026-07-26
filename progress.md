@@ -88,3 +88,22 @@
 - `.github/workflows/deploy-pages.yml`：新增 WASM 构建、产物验证与 Pages 部署。
 - `progress.md`：追加实现与验证记录。
 - 回滚方式：执行 `git revert (git log --grep='^ci: deploy Qt WebAssembly to GitHub Pages$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 补充在线游玩与部署文档
+
+### What was done
+
+- README 增加 Qt WebAssembly 默认入口和 HTML 备用入口。
+- 增加自动部署、本地构建、存档与回滚说明。
+
+### Testing
+
+- README 的两个在线地址和部署文档链接断言通过。
+- 部署文档的固定工具链断言与 `git diff --check` 通过。
+
+### Notes
+
+- `README.md`：增加在线游玩入口。
+- `docs/deployment.md`：新增部署和本地构建说明。
+- `progress.md`：追加实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^docs: add Qt WebAssembly play and deployment guide$' -1 --format='%H')`。

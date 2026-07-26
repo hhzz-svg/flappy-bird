@@ -1,5 +1,14 @@
 # Flappy Bird
 
+## 在线游玩
+
+- **Qt WebAssembly 版（默认）**：<https://hhzz-svg.github.io/flappy-bird/>
+- HTML 增强版（备用）：<https://hhzz-svg.github.io/flappy-bird/enhanced.html>
+
+部署与本地 WebAssembly 构建说明见 [`docs/deployment.md`](docs/deployment.md)。
+
+---
+
 本仓库包含两个实现：
 
 | 版本 | 文件 | 说明 |
