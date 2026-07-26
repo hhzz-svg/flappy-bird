@@ -229,3 +229,22 @@
 - `docs/superpowers/plans/2026-07-26-qt-wasm-readability-evidence.md`：删除可读性修复实施计划。
 - `progress.md`：追加删除范围、验证和回滚记录。
 - 回滚方式：执行 `git revert (git log --grep='^docs: remove internal planning documents$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 删除剩余 docs 文档
+
+### What was done
+
+- 删除剩余的正式部署文档，并移除 README 中对应的失效链接。
+
+### Testing
+
+- 已确认仓库中不再存在 `docs/` 文件。
+- 已确认 README 不再引用 `docs/deployment.md`。
+- `git diff --check` 通过。
+
+### Notes
+
+- `docs/deployment.md`：删除部署与本地构建说明。
+- `README.md`：移除部署文档链接，保留在线游玩地址。
+- `progress.md`：追加删除范围、验证和回滚记录。
+- 回滚方式：执行 `git revert (git log --grep='^docs: remove remaining docs$' -1 --format='%H')`。
