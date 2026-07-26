@@ -52,3 +52,21 @@
 - `.gitignore`：忽略项目内 Git worktree 目录。
 - `progress.md`：追加隔离工作区准备记录。
 - 回滚方式：执行 `git revert (git log --grep='^chore: ignore local worktrees$' -1 --format='%H')`。
+
+## 2026-07-26 - Task: 为 Qt WebAssembly 启用浏览器存档
+
+### What was done
+
+- WebAssembly 构建改用浏览器 localStorage 保存最高分、金币和皮肤。
+- 桌面构建继续使用原有平台默认设置存储。
+
+### Testing
+
+- WASM 条件编译中 `WebLocalStorageFormat` 源码断言通过。
+- Qt 6.11.1 MinGW 桌面 Release 构建通过，生成 `build/desktop-pages/release/FlappyBird.exe`。
+
+### Notes
+
+- `main.cpp`：增加 WASM 专用的 QSettings 默认格式。
+- `progress.md`：追加实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^feat: persist WASM game settings in browser$' -1 --format='%H')`。
