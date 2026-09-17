@@ -80,6 +80,8 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
 private slots:
@@ -130,6 +132,10 @@ private:
     QRectF overMenuRect() const;
     QRectF pauseResumeRect() const;
     QRectF pauseMenuRect() const;
+
+    // --- pointer hover ---
+    bool hoverActiveRegion(const QRectF &r) const;
+    void updateHoverCursor();
 
     // --- drawing ---
     void drawSky(QPainter &p);
@@ -201,6 +207,10 @@ private:
 
     QTimer        *m_timer;
     QElapsedTimer  m_elapsed;
+
+    // pointer hover (logical coords; invalid while mouse is outside the widget)
+    QPointF m_mousePos;
+    bool    m_mouseInside;
 };
 
 #endif
