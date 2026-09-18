@@ -398,3 +398,29 @@
 - `progress.md`：追加本轮实现与实测数据。
 - 遗留：菜单界面的文字绘制仍占 2.2ms，是当前最大单项，可在后续用静态文字层缓存进一步优化。
 - 回滚方式：执行 `git revert (git log --grep='^perf: cache scene layers and render at a fixed resolution$' -1 --format='%H')`。
+
+## 2026-09-18 - Task: 音效改用 CC0 素材包
+
+### What was done
+
+- 从 npm 的 `uisfx@0.4.0` 取用 arcade 音色包，音频为 CC0 公有领域授权；下载时以 registry 的 sha512 integrity 校验，许可全文与选用清单落档。
+- 对该包 78 个音效批量测量时长、峰值与频谱重心后选型：常响的拍翅膀与界面点击选最短促的音，坠毁选最响且最暗的音，金币选最明亮的音。
+- 八个事件改用素材：拍翅膀、得分、里程碑、金币、坠毁、界面点击、购买、金币不足；风暴闪电保留合成音，因为整包均为 UI 音色、没有雷声所需的低频轰鸣。
+- 素材统一转为单声道 22050Hz 16 位 WAV，裁掉静音、加淡入淡出、按用途做峰值归一化（拍翅膀 -18dB 最轻，坠毁 -7dB 最重），共 117KB。
+- 播放实现：桌面解析 WAV 后作为采样 voice 喂入既有混音器，按设备实际采样率线性重采样；WebAssembly 侧在 JS 中同步解析 PCM 生成 AudioBuffer，避免异步解码丢掉首次手势触发的那一声。
+
+### Testing
+
+- 采样通路测试 16 项通过：八个音效均从资源加载成功且速率与电平正确；原生速率下可播且播完即静音；48kHz 立体声设备下重采样后仍可播、双声道一致、结束干净；采样与合成音可叠加混合；静音同时切断两者。
+- 浏览器端 EM_JS 测试 16 项通过：五个 EM_JS 函数语法正确；真实 WAV 在 Chromium 中同步解析成功（时长 0.1307s 与素材一致）；未解码时播放会跳过而非报错；静音门控正常。
+- 桌面构建零警告，未启用 Qt Multimedia 的降级分支同样可编译。
+- 字体覆盖率、`tools/verify-wasm-ui.ps1` 依赖字面量、禁用 emoji 与音频溯源哈希复核全部通过。
+
+### Notes
+
+- `assets/audio/*.wav`、`assets/audio/SOURCE.md`、`assets/audio/LICENSE-CC0.txt`：新增素材、溯源与许可。
+- `resources.qrc`：嵌入八个音效。
+- `sfx.cpp`：新增 WAV 解析、采样 voice 混音与 WebAssembly 端同步解码，音效表改为素材优先。
+- `README.md`、`progress.md`：更新音效说明与本轮记录。
+- 实际听感需人工确认：容器内无音频设备。
+- 回滚方式：执行 `git revert (git log --grep='^feat: replace synthesised cues with CC0 arcade samples$' -1 --format='%H')`。

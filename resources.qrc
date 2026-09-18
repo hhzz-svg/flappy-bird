@@ -5,4 +5,14 @@
     <qresource prefix="/icons">
         <file alias="favicon.ico">assets/favicon.ico</file>
     </qresource>
+    <qresource prefix="/audio">
+        <file alias="flap.wav">assets/audio/flap.wav</file>
+        <file alias="point.wav">assets/audio/point.wav</file>
+        <file alias="milestone.wav">assets/audio/milestone.wav</file>
+        <file alias="coin.wav">assets/audio/coin.wav</file>
+        <file alias="hit.wav">assets/audio/hit.wav</file>
+        <file alias="select.wav">assets/audio/select.wav</file>
+        <file alias="buy.wav">assets/audio/buy.wav</file>
+        <file alias="denied.wav">assets/audio/denied.wav</file>
+    </qresource>
 </RCC>
