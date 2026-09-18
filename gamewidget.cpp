@@ -121,6 +121,7 @@ GameWidget::GameWidget(QWidget *parent)
     , m_timer(new QTimer(this))
     , m_mousePos(-1, -1)
     , m_mouseInside(false)
+    , m_pressT(PRESS_DURATION)
 {
     setMinimumSize(360, 540);
     resize(LW, LH);
@@ -363,6 +364,19 @@ void GameWidget::tick()
     m_tGlobal += 0.0166;
     m_wingPhase += 0.25;
 
+    if (m_pressT < PRESS_DURATION) {
+        m_pressT += 0.0166;
+        if (m_pressT >= PRESS_DURATION) {
+            m_pressT = PRESS_DURATION;
+            m_pressRect = QRectF();
+            if (m_pressAction) {
+                auto action = std::move(m_pressAction);
+                m_pressAction = nullptr;
+                action();
+            }
+        }
+    }
+
     for (auto &c : m_clouds) {
         c.x -= c.speed;
         if (c.x < -70 * c.scale) { c.x = LW + 40; c.y = frand(40, LH * 0.42); }
@@ -554,23 +568,43 @@ void GameWidget::mousePressEvent(QMouseEvent *e)
     const QPointF p = toLogical(e->position());
 
     if (m_state == Menu) {
-        for (int i = 0; i < modes().size(); ++i)
-            if (menuCardRect(i).contains(p)) { m_menuIndex = i; startMode(i); update(); return; }
-        if (menuShopBtnRect().contains(p)) { m_state = Shop; update(); return; }
+        for (int i = 0; i < modes().size(); ++i) {
+            const QRectF r = menuCardRect(i);
+            if (r.contains(p)) {
+                m_menuIndex = i;
+                triggerPress(r, [this, i] { startMode(i); });
+                update();
+                return;
+            }
+        }
+        const QRectF sb = menuShopBtnRect();
+        if (sb.contains(p)) {
+            triggerPress(sb, [this] { m_state = Shop; });
+            update();
+            return;
+        }
         return;
     }
     if (m_state == Shop) {
-        if (shopBackRect().contains(p)) { m_state = Menu; update(); return; }
+        const QRectF bk = shopBackRect();
+        if (bk.contains(p)) {
+            triggerPress(bk, [this] { m_state = Menu; });
+            update();
+            return;
+        }
         for (int i = 0; i < skins().size(); ++i) {
-            if (shopItemRect(i).contains(p)) {
+            const QRectF r = shopItemRect(i);
+            if (r.contains(p)) {
                 m_shopIndex = i;
-                const Skin &s = skins()[i];
-                if (m_owned.contains(s.id)) { m_skinId = s.id; saveSkins(); }
-                else if (m_coinsBalance >= s.cost) {
-                    m_coinsBalance -= s.cost; m_owned.insert(s.id); m_skinId = s.id;
-                    saveCoins(); saveSkins();
-                    m_shopMsg = QStringLiteral("已购买 %1！").arg(s.name); m_shopMsgLife = 1.6;
-                } else { m_shopMsg = QStringLiteral("金币不足"); m_shopMsgLife = 1.6; }
+                triggerPress(r, [this, i] {
+                    const Skin &s = skins()[i];
+                    if (m_owned.contains(s.id)) { m_skinId = s.id; saveSkins(); }
+                    else if (m_coinsBalance >= s.cost) {
+                        m_coinsBalance -= s.cost; m_owned.insert(s.id); m_skinId = s.id;
+                        saveCoins(); saveSkins();
+                        m_shopMsg = QStringLiteral("已购买 %1！").arg(s.name); m_shopMsgLife = 1.6;
+                    } else { m_shopMsg = QStringLiteral("金币不足"); m_shopMsgLife = 1.6; }
+                });
                 update();
                 return;
             }
@@ -578,15 +612,15 @@ void GameWidget::mousePressEvent(QMouseEvent *e)
         return;
     }
     if (m_state == Paused) {
-        if (pauseResumeRect().contains(p)) m_state = Playing;
-        else if (pauseMenuRect().contains(p)) m_state = Menu;
-        update();
+        const QRectF rr = pauseResumeRect(), rm = pauseMenuRect();
+        if (rr.contains(p)) { triggerPress(rr, [this] { m_state = Playing; }); update(); return; }
+        if (rm.contains(p)) { triggerPress(rm, [this] { m_state = Menu; });    update(); return; }
         return;
     }
     if (m_state == GameOver) {
-        if (overRetryRect().contains(p)) startMode(m_modeIndex);
-        else if (overMenuRect().contains(p)) m_state = Menu;
-        update();
+        const QRectF rr = overRetryRect(), rm = overMenuRect();
+        if (rr.contains(p)) { triggerPress(rr, [this] { startMode(m_modeIndex); }); update(); return; }
+        if (rm.contains(p)) { triggerPress(rm, [this] { m_state = Menu; });         update(); return; }
         return;
     }
     if (m_state == Ready) { m_state = Playing; flap(); }
@@ -613,6 +647,29 @@ void GameWidget::leaveEvent(QEvent *)
 bool GameWidget::hoverActiveRegion(const QRectF &r) const
 {
     return m_mouseInside && r.contains(m_mousePos);
+}
+
+void GameWidget::triggerPress(const QRectF &r, std::function<void()> action)
+{
+    m_pressRect = r;
+    m_pressT = 0.0;
+    m_pressAction = std::move(action);
+}
+
+qreal GameWidget::pressScale(const QRectF &r) const
+{
+    if (m_pressT >= PRESS_DURATION || r != m_pressRect) return 1.0;
+    const qreal t = qBound(0.0, m_pressT / PRESS_DURATION, 1.0);
+    return 1.0 - 0.07 * qSin(t * M_PI);
+}
+
+void GameWidget::withPressTransform(QPainter &p, const QRectF &r, const std::function<void()> &draw) const
+{
+    const qreal s = pressScale(r);
+    p.save();
+    if (s != 1.0) { p.translate(r.center()); p.scale(s, s); p.translate(-r.center()); }
+    draw();
+    p.restore();
 }
 
 void GameWidget::syncHoverSelection()
@@ -1127,42 +1184,46 @@ void GameWidget::drawMenu(QPainter &p)
         const bool sel = (i == m_menuIndex);
         const qreal pulse = sel ? (0.5 + 0.5 * qSin(m_tGlobal * 5)) : 0;
 
-        p.setPen(Qt::NoPen);
-        p.setBrush(sel ? QColor(22, 28, 54, 210) : QColor(22, 28, 54, 145));
-        p.drawRoundedRect(r, 15, 15);
-        QColor bc = sel ? m.accent : QColor(255, 255, 255, 46);
-        bc.setAlphaF(sel ? (0.7 + pulse * 0.3) : 0.4);
-        p.setPen(QPen(bc, sel ? 2.4 : 1.2));
-        p.setBrush(Qt::NoBrush);
-        p.drawRoundedRect(r, 15, 15);
+        withPressTransform(p, r, [&] {
+            p.setPen(Qt::NoPen);
+            p.setBrush(sel ? QColor(22, 28, 54, 210) : QColor(22, 28, 54, 145));
+            p.drawRoundedRect(r, 15, 15);
+            QColor bc = sel ? m.accent : QColor(255, 255, 255, 46);
+            bc.setAlphaF(sel ? (0.7 + pulse * 0.3) : 0.4);
+            p.setPen(QPen(bc, sel ? 2.4 : 1.2));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(r, 15, 15);
 
-        // icon chip
-        QColor chip = m.accent; chip.setAlphaF(0.22);
-        p.setPen(Qt::NoPen); p.setBrush(chip);
-        p.drawRoundedRect(QRectF(r.x() + 10, r.y() + 9, 42, 42), 12, 12);
-        label(p, QRectF(r.x() + 10, r.y() + 9, 42, 42), m.icon, 24, QColor(255, 255, 255), Qt::AlignCenter);
+            // icon chip
+            QColor chip = m.accent; chip.setAlphaF(0.22);
+            p.setPen(Qt::NoPen); p.setBrush(chip);
+            p.drawRoundedRect(QRectF(r.x() + 10, r.y() + 9, 42, 42), 12, 12);
+            label(p, QRectF(r.x() + 10, r.y() + 9, 42, 42), m.icon, 24, QColor(255, 255, 255), Qt::AlignCenter);
 
-        label(p, QRectF(r.x() + 62, r.y() + 8, 220, 26), m.name, 18,
-              sel ? m.accent : QColor(255, 255, 255), Qt::AlignVCenter | Qt::AlignLeft);
-        label(p, QRectF(r.x() + 62, r.y() + 32, 260, 22), m.desc, 12,
-              QColor(255, 255, 255, 190), Qt::AlignVCenter | Qt::AlignLeft, false);
+            label(p, QRectF(r.x() + 62, r.y() + 8, 220, 26), m.name, 18,
+                  sel ? m.accent : QColor(255, 255, 255), Qt::AlignVCenter | Qt::AlignLeft);
+            label(p, QRectF(r.x() + 62, r.y() + 32, 260, 22), m.desc, 12,
+                  QColor(255, 255, 255, 190), Qt::AlignVCenter | Qt::AlignLeft, false);
 
-        label(p, QRectF(r.right() - 76, r.y() + 6, 64, 18), QStringLiteral("最佳"), 11,
-              QColor(255, 255, 255, 140), Qt::AlignVCenter | Qt::AlignLeft, false);
-        label(p, QRectF(r.right() - 76, r.y() + 24, 64, 26), QString::number(getBest(m.id)), 20,
-              QColor(255, 255, 255), Qt::AlignVCenter | Qt::AlignLeft);
+            label(p, QRectF(r.right() - 76, r.y() + 6, 64, 18), QStringLiteral("最佳"), 11,
+                  QColor(255, 255, 255, 140), Qt::AlignVCenter | Qt::AlignLeft, false);
+            label(p, QRectF(r.right() - 76, r.y() + 24, 64, 26), QString::number(getBest(m.id)), 20,
+                  QColor(255, 255, 255), Qt::AlignVCenter | Qt::AlignLeft);
+        });
     }
 
     // shop button
     const QRectF sb = menuShopBtnRect();
     const bool sbHov = hoverActiveRegion(sb);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(255, 226, 122, sbHov ? 66 : 40));
-    p.drawRoundedRect(sb, 14, 14);
-    p.setPen(QPen(QColor(255, 226, 122, sbHov ? 255 : 200), sbHov ? 2.6 : 2));
-    p.setBrush(Qt::NoBrush);
-    p.drawRoundedRect(sb, 14, 14);
-    label(p, sb, QStringLiteral("皮肤商店"), 18, QColor(255, 226, 122), Qt::AlignCenter, true, 4);
+    withPressTransform(p, sb, [&] {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(255, 226, 122, sbHov ? 66 : 40));
+        p.drawRoundedRect(sb, 14, 14);
+        p.setPen(QPen(QColor(255, 226, 122, sbHov ? 255 : 200), sbHov ? 2.6 : 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(sb, 14, 14);
+        label(p, sb, QStringLiteral("皮肤商店"), 18, QColor(255, 226, 122), Qt::AlignCenter, true, 4);
+    });
 
     const qreal a = 0.5 + 0.5 * qSin(m_tGlobal * 4);
     label(p, QRectF(0, 612, LW, 20), QStringLiteral("↑↓ 选择 · 回车开始 · B 进商店 · 点击卡片直接玩"),
@@ -1186,26 +1247,28 @@ void GameWidget::drawShop(QPainter &p)
         const bool equipped = (s.id == m_skinId);
         const bool sel = (i == m_shopIndex);
 
-        p.setPen(Qt::NoPen);
-        p.setBrush(QColor(255, 255, 255, equipped ? 34 : 20));
-        p.drawRoundedRect(r, 14, 14);
-        QColor border = equipped ? QColor(126, 232, 176)
-                       : sel     ? QColor(255, 255, 255, 200)
-                                 : QColor(255, 255, 255, 46);
-        p.setPen(QPen(border, equipped || sel ? 2.4 : 1.2));
-        p.setBrush(Qt::NoBrush);
-        p.drawRoundedRect(r, 14, 14);
+        withPressTransform(p, r, [&] {
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(255, 255, 255, equipped ? 34 : 20));
+            p.drawRoundedRect(r, 14, 14);
+            QColor border = equipped ? QColor(126, 232, 176)
+                           : sel     ? QColor(255, 255, 255, 200)
+                                     : QColor(255, 255, 255, 46);
+            p.setPen(QPen(border, equipped || sel ? 2.4 : 1.2));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(r, 14, 14);
 
-        drawBirdIcon(p, r.center().x(), r.y() + 34, 18, s);
-        label(p, QRectF(r.x(), r.y() + 54, r.width(), 20), s.name, 15,
-              QColor(255, 255, 255), Qt::AlignHCenter);
+            drawBirdIcon(p, r.center().x(), r.y() + 34, 18, s);
+            label(p, QRectF(r.x(), r.y() + 54, r.width(), 20), s.name, 15,
+                  QColor(255, 255, 255), Qt::AlignHCenter);
 
-        QString status; QColor col;
-        if (equipped)     { status = QStringLiteral("已装备");  col = QColor(126, 232, 176); }
-        else if (owned)   { status = QStringLiteral("点击装备"); col = QColor(255, 255, 255, 200); }
-        else if (m_coinsBalance >= s.cost) { status = QStringLiteral("★ %1").arg(s.cost); col = QColor(255, 226, 122); }
-        else              { status = QStringLiteral("★ %1").arg(s.cost); col = QColor(255, 255, 255, 110); }
-        label(p, QRectF(r.x(), r.y() + 72, r.width(), 18), status, 13, col, Qt::AlignHCenter, true);
+            QString status; QColor col;
+            if (equipped)     { status = QStringLiteral("已装备");  col = QColor(126, 232, 176); }
+            else if (owned)   { status = QStringLiteral("点击装备"); col = QColor(255, 255, 255, 200); }
+            else if (m_coinsBalance >= s.cost) { status = QStringLiteral("★ %1").arg(s.cost); col = QColor(255, 226, 122); }
+            else              { status = QStringLiteral("★ %1").arg(s.cost); col = QColor(255, 255, 255, 110); }
+            label(p, QRectF(r.x(), r.y() + 72, r.width(), 18), status, 13, col, Qt::AlignHCenter, true);
+        });
     }
 
     // toast message
@@ -1216,10 +1279,12 @@ void GameWidget::drawShop(QPainter &p)
     // back button
     const QRectF bk = shopBackRect();
     const bool bkHov = hoverActiveRegion(bk);
-    p.setPen(QPen(QColor(255, 255, 255, bkHov ? 255 : 200), bkHov ? 2.6 : 2));
-    p.setBrush(QColor(255, 255, 255, bkHov ? 38 : 22));
-    p.drawRoundedRect(bk, 14, 14);
-    label(p, bk, QStringLiteral("← 返回菜单"), 17, QColor(255, 255, 255), Qt::AlignCenter, true);
+    withPressTransform(p, bk, [&] {
+        p.setPen(QPen(QColor(255, 255, 255, bkHov ? 255 : 200), bkHov ? 2.6 : 2));
+        p.setBrush(QColor(255, 255, 255, bkHov ? 38 : 22));
+        p.drawRoundedRect(bk, 14, 14);
+        label(p, bk, QStringLiteral("← 返回菜单"), 17, QColor(255, 255, 255), Qt::AlignCenter, true);
+    });
 }
 
 void GameWidget::drawPaused(QPainter &p)
@@ -1230,14 +1295,18 @@ void GameWidget::drawPaused(QPainter &p)
 
     const QRectF rr = pauseResumeRect(), rm = pauseMenuRect();
     const bool rrHov = hoverActiveRegion(rr), rmHov = hoverActiveRegion(rm);
-    p.setPen(QPen(mode().accent, rrHov ? 2.6 : 2));
-    p.setBrush(QColor(mode().accent.red(), mode().accent.green(), mode().accent.blue(), rrHov ? 66 : 40));
-    p.drawRoundedRect(rr, 14, 14);
-    label(p, rr, QStringLiteral("继续"), 17, mode().accent, Qt::AlignCenter, true);
-    p.setPen(QPen(QColor(255, 255, 255, rmHov ? 255 : 200), rmHov ? 2.6 : 2));
-    p.setBrush(QColor(255, 255, 255, rmHov ? 38 : 22));
-    p.drawRoundedRect(rm, 14, 14);
-    label(p, rm, QStringLiteral("返回菜单"), 17, QColor(255, 255, 255), Qt::AlignCenter, true);
+    withPressTransform(p, rr, [&] {
+        p.setPen(QPen(mode().accent, rrHov ? 2.6 : 2));
+        p.setBrush(QColor(mode().accent.red(), mode().accent.green(), mode().accent.blue(), rrHov ? 66 : 40));
+        p.drawRoundedRect(rr, 14, 14);
+        label(p, rr, QStringLiteral("继续"), 17, mode().accent, Qt::AlignCenter, true);
+    });
+    withPressTransform(p, rm, [&] {
+        p.setPen(QPen(QColor(255, 255, 255, rmHov ? 255 : 200), rmHov ? 2.6 : 2));
+        p.setBrush(QColor(255, 255, 255, rmHov ? 38 : 22));
+        p.drawRoundedRect(rm, 14, 14);
+        label(p, rm, QStringLiteral("返回菜单"), 17, QColor(255, 255, 255), Qt::AlignCenter, true);
+    });
 }
 
 void GameWidget::drawGameOver(QPainter &p)
@@ -1283,12 +1352,16 @@ void GameWidget::drawGameOver(QPainter &p)
 
     const QRectF rr = overRetryRect(), rm = overMenuRect();
     const bool rrHov = hoverActiveRegion(rr), rmHov = hoverActiveRegion(rm);
-    p.setPen(QPen(mode().accent, rrHov ? 2.6 : 2));
-    p.setBrush(QColor(mode().accent.red(), mode().accent.green(), mode().accent.blue(), rrHov ? 66 : 40));
-    p.drawRoundedRect(rr, 14, 14);
-    label(p, rr, QStringLiteral("再来一局"), 17, mode().accent, Qt::AlignCenter, true);
-    p.setPen(QPen(QColor(255, 255, 255, rmHov ? 255 : 200), rmHov ? 2.6 : 2));
-    p.setBrush(QColor(255, 255, 255, rmHov ? 38 : 22));
-    p.drawRoundedRect(rm, 14, 14);
-    label(p, rm, QStringLiteral("返回菜单"), 17, QColor(255, 255, 255), Qt::AlignCenter, true);
+    withPressTransform(p, rr, [&] {
+        p.setPen(QPen(mode().accent, rrHov ? 2.6 : 2));
+        p.setBrush(QColor(mode().accent.red(), mode().accent.green(), mode().accent.blue(), rrHov ? 66 : 40));
+        p.drawRoundedRect(rr, 14, 14);
+        label(p, rr, QStringLiteral("再来一局"), 17, mode().accent, Qt::AlignCenter, true);
+    });
+    withPressTransform(p, rm, [&] {
+        p.setPen(QPen(QColor(255, 255, 255, rmHov ? 255 : 200), rmHov ? 2.6 : 2));
+        p.setBrush(QColor(255, 255, 255, rmHov ? 38 : 22));
+        p.drawRoundedRect(rm, 14, 14);
+        label(p, rm, QStringLiteral("返回菜单"), 17, QColor(255, 255, 255), Qt::AlignCenter, true);
+    });
 }

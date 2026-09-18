@@ -9,6 +9,8 @@
 #include <QSet>
 #include <QElapsedTimer>
 
+#include <functional>
+
 class QTimer;
 class QKeyEvent;
 class QMouseEvent;
@@ -138,6 +140,11 @@ private:
     void updateHoverCursor();
     void syncHoverSelection();
 
+    // --- press feedback (mouse-driven only; keyboard confirm stays instant) ---
+    void triggerPress(const QRectF &r, std::function<void()> action);
+    qreal pressScale(const QRectF &r) const;
+    void withPressTransform(QPainter &p, const QRectF &r, const std::function<void()> &draw) const;
+
     // --- drawing ---
     void drawSky(QPainter &p);
     void drawPipes(QPainter &p);
@@ -167,6 +174,7 @@ private:
     static constexpr qreal PIPE_W   = 66.0;
     static constexpr qreal LASER_W  = 16.0;
     static constexpr qreal MAX_V    = 11.0;
+    static constexpr qreal PRESS_DURATION = 0.11;   // seconds
 
     // State
     State m_state;
@@ -212,6 +220,11 @@ private:
     // pointer hover (logical coords; invalid while mouse is outside the widget)
     QPointF m_mousePos;
     bool    m_mouseInside;
+
+    // button press feedback; the action runs once the press animation finishes
+    QRectF  m_pressRect;
+    qreal   m_pressT;
+    std::function<void()> m_pressAction;
 };
 
 #endif
