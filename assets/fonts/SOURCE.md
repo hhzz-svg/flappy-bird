@@ -10,8 +10,8 @@
 - License source:
   <https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE>
 - License: SIL Open Font License 1.1; the complete upstream license is in `OFL.txt`.
-- Subset size: `115436` bytes
-- Subset SHA-256: `FE745A3F81743181BB52DC0218C5CC93CB21832BE2D55F9A4005112CD57A52E3`
+- Subset size: `113244` bytes
+- Subset SHA-256: `4E34CFC7B0A0FCD745E619838DFD6F15927D061F7EB06E770BA3BD122612EC65`
 
 The repository stores only the glyph subset needed by the Qt WebAssembly UI. It was generated
 from the verified source file with fontTools:

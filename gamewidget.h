@@ -120,11 +120,15 @@ private:
     bool  checkCollision();
     QPointF toLogical(const QPointF &p) const;
 
+    // --- shop ---
+    void purchaseOrEquip(int index);
+
     // --- persistence ---
     void loadProfile();
     void saveBest();
     void saveCoins();
     void saveSkins();
+    void saveMuted();
 
     // --- input regions (logical coords, single source of truth) ---
     QRectF menuCardRect(int i) const;

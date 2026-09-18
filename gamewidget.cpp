@@ -1,5 +1,7 @@
 #include "gamewidget.h"
 
+#include "sfx.h"
+
 #include <QApplication>
 #include <QPainter>
 #include <QPainterPath>
@@ -160,6 +162,7 @@ void GameWidget::loadProfile()
     m_owned = QSet<QString>(owned.begin(), owned.end());
     m_owned.insert(QStringLiteral("default"));
     if (!m_owned.contains(m_skinId)) m_skinId = QStringLiteral("default");
+    Sfx::setMuted(s.value(QStringLiteral("muted"), false).toBool());
 }
 void GameWidget::saveCoins()
 {
@@ -171,6 +174,11 @@ void GameWidget::saveSkins()
     QSettings s(QStringLiteral("FlappyQt"), QStringLiteral("FlappyBird"));
     s.setValue(QStringLiteral("owned"), QStringList(m_owned.begin(), m_owned.end()));
     s.setValue(QStringLiteral("skin"), m_skinId);
+}
+void GameWidget::saveMuted()
+{
+    QSettings s(QStringLiteral("FlappyQt"), QStringLiteral("FlappyBird"));
+    s.setValue(QStringLiteral("muted"), Sfx::muted());
 }
 void GameWidget::saveBest()
 {
@@ -220,10 +228,34 @@ void GameWidget::startMode(int index)
     navigateTo(Ready);
 }
 
+void GameWidget::purchaseOrEquip(int index)
+{
+    const Skin &s = skins()[index];
+    if (m_owned.contains(s.id)) {
+        m_skinId = s.id;
+        saveSkins();
+        Sfx::select();
+    } else if (m_coinsBalance >= s.cost) {
+        m_coinsBalance -= s.cost;
+        m_owned.insert(s.id);
+        m_skinId = s.id;
+        saveCoins();
+        saveSkins();
+        m_shopMsg = QStringLiteral("已购买 %1！").arg(s.name);
+        m_shopMsgLife = 1.6;
+        Sfx::buy();
+    } else {
+        m_shopMsg = QStringLiteral("金币不足");
+        m_shopMsgLife = 1.6;
+        Sfx::denied();
+    }
+}
+
 void GameWidget::flap()
 {
     m_birdV = mode().jump;
     spawnParticles(BIRD_X - 6, m_birdY + 6, 3, { QColor(255,255,255), QColor(223,233,255) }, 2);
+    Sfx::flap();
 }
 
 void GameWidget::die()
@@ -231,6 +263,7 @@ void GameWidget::die()
     if (m_state != Playing) return;
     m_state = GameOver;
     m_screenShake = 16;
+    Sfx::hit();
     spawnParticles(BIRD_X, m_birdY, 42,
                    { birdColor(), QColor(255,217,61), QColor(255,140,0), QColor(255,85,85) }, 6);
     saveBest();
@@ -436,7 +469,7 @@ void GameWidget::tick()
             m_gustActive = false;
             m_gustTimer = 2.6 + frand(0, 2.4);
         }
-        if (frand(0, 1) < 0.004) m_flash = 0.85;
+        if (frand(0, 1) < 0.004) { m_flash = 0.85; Sfx::thunder(); }
     }
 
     m_birdV += mode().gravity;
@@ -457,10 +490,12 @@ void GameWidget::tick()
     auto onScore = [&]() {
         m_score += qRound(mode().scoreMul);
         m_scorePop = 1;
+        Sfx::point();
         if (m_score > 0 && m_score % 10 == 0) {
             spawnParticles(LW / 2, LH * 0.4, 26,
                            { mode().accent, QColor(255,217,61), QColor(255,255,255) }, 6);
             m_screenShake = qMax(m_screenShake, 6.0);
+            Sfx::milestone();
         }
     };
 
@@ -489,6 +524,7 @@ void GameWidget::tick()
             c.collected = true;
             m_runCoins++; m_combo++;
             m_bestCombo = qMax(m_bestCombo, m_combo);
+            Sfx::coin();
             spawnParticles(c.x, c.y, 8, { QColor(255,226,122), QColor(255,244,194), QColor(255,217,61) }, 3);
             if (m_combo >= 3) { addFloater(c.x, c.y, QStringLiteral("+%1 ×%2").arg(m_combo).arg(m_combo), QColor(255,226,122)); m_score += 1; }
             else addFloater(c.x, c.y, QStringLiteral("+1"), QColor(255,226,122));
@@ -516,10 +552,19 @@ QPointF GameWidget::toLogical(const QPointF &p) const
 void GameWidget::keyPressEvent(QKeyEvent *e)
 {
     const int k = e->key();
-    if (k == Qt::Key_M) { e->accept(); return; }  // (reserved / no-op: Qt build has no audio)
+    Sfx::noteUserGesture();
+
+    if (k == Qt::Key_M) {
+        Sfx::setMuted(!Sfx::muted());
+        saveMuted();
+        if (!Sfx::muted()) Sfx::select();   // audible confirmation when turning sound back on
+        update();
+        e->accept();
+        return;
+    }
 
     if (k == Qt::Key_Escape) {
-        if (m_state != Menu) { navigateTo(Menu); update(); }
+        if (m_state != Menu) { Sfx::select(); navigateTo(Menu); update(); }
         else close();
         e->accept();
         return;
@@ -537,30 +582,22 @@ void GameWidget::keyPressEvent(QKeyEvent *e)
     const bool confirm = (k == Qt::Key_Space || k == Qt::Key_Return || k == Qt::Key_Enter);
 
     if (m_state == Menu) {
-        if (up)        { m_menuIndex = (m_menuIndex - 1 + modes().size()) % modes().size(); }
-        else if (down) { m_menuIndex = (m_menuIndex + 1) % modes().size(); }
-        else if (confirm) { startMode(m_menuIndex); }
-        else if (k == Qt::Key_B) { navigateTo(Shop); }
+        if (up)        { m_menuIndex = (m_menuIndex - 1 + modes().size()) % modes().size(); Sfx::select(); }
+        else if (down) { m_menuIndex = (m_menuIndex + 1) % modes().size(); Sfx::select(); }
+        else if (confirm) { Sfx::select(); startMode(m_menuIndex); }
+        else if (k == Qt::Key_B) { Sfx::select(); navigateTo(Shop); }
         update();
         return;
     }
     if (m_state == Shop) {
-        if (up)        { m_shopIndex = (m_shopIndex - 1 + skins().size()) % skins().size(); }
-        else if (down) { m_shopIndex = (m_shopIndex + 1) % skins().size(); }
-        else if (confirm) {
-            const Skin &s = skins()[m_shopIndex];
-            if (m_owned.contains(s.id)) { m_skinId = s.id; saveSkins(); }
-            else if (m_coinsBalance >= s.cost) {
-                m_coinsBalance -= s.cost; m_owned.insert(s.id); m_skinId = s.id;
-                saveCoins(); saveSkins();
-                m_shopMsg = QStringLiteral("已购买 %1！").arg(s.name); m_shopMsgLife = 1.6;
-            } else { m_shopMsg = QStringLiteral("金币不足"); m_shopMsgLife = 1.6; }
-        }
+        if (up)        { m_shopIndex = (m_shopIndex - 1 + skins().size()) % skins().size(); Sfx::select(); }
+        else if (down) { m_shopIndex = (m_shopIndex + 1) % skins().size(); Sfx::select(); }
+        else if (confirm) { purchaseOrEquip(m_shopIndex); }
         update();
         return;
     }
     if (m_state == Paused) { if (confirm) m_state = Playing; update(); return; }
-    if (m_state == GameOver) { if (confirm) startMode(m_modeIndex); update(); return; }
+    if (m_state == GameOver) { if (confirm) { Sfx::select(); startMode(m_modeIndex); } update(); return; }
 
     // Ready / Playing -> flap
     if (confirm || up) {
@@ -573,6 +610,7 @@ void GameWidget::keyPressEvent(QKeyEvent *e)
 void GameWidget::mousePressEvent(QMouseEvent *e)
 {
     if (e->button() != Qt::LeftButton) return;
+    Sfx::noteUserGesture();
     const QPointF p = toLogical(e->position());
 
     if (m_state == Menu) {
@@ -604,15 +642,7 @@ void GameWidget::mousePressEvent(QMouseEvent *e)
             const QRectF r = shopItemRect(i);
             if (r.contains(p)) {
                 m_shopIndex = i;
-                triggerPress(r, [this, i] {
-                    const Skin &s = skins()[i];
-                    if (m_owned.contains(s.id)) { m_skinId = s.id; saveSkins(); }
-                    else if (m_coinsBalance >= s.cost) {
-                        m_coinsBalance -= s.cost; m_owned.insert(s.id); m_skinId = s.id;
-                        saveCoins(); saveSkins();
-                        m_shopMsg = QStringLiteral("已购买 %1！").arg(s.name); m_shopMsgLife = 1.6;
-                    } else { m_shopMsg = QStringLiteral("金币不足"); m_shopMsgLife = 1.6; }
-                });
+                triggerPress(r, [this, i] { purchaseOrEquip(i); });
                 update();
                 return;
             }
@@ -659,6 +689,7 @@ bool GameWidget::hoverActiveRegion(const QRectF &r) const
 
 void GameWidget::triggerPress(const QRectF &r, std::function<void()> action)
 {
+    Sfx::select();
     m_pressRect = r;
     m_pressT = 0.0;
     m_pressAction = std::move(action);
@@ -805,6 +836,10 @@ void GameWidget::paintEvent(QPaintEvent *)
     case Paused:   drawHUD(p); drawPaused(p);   break;
     case GameOver: drawHUD(p); drawGameOver(p); break;
     }
+
+    if (Sfx::muted())
+        label(p, QRectF(12, 48, 140, 20), QStringLiteral("静音"), 13,
+              QColor(255, 255, 255, 190), Qt::AlignLeft | Qt::AlignVCenter, true, 6);
 
     if (m_screenFade > 0)
         p.fillRect(QRectF(0, 0, LW, LH), QColor(6, 8, 18, int(m_screenFade * 190)));
@@ -1233,7 +1268,7 @@ void GameWidget::drawMenu(QPainter &p)
     });
 
     const qreal a = 0.5 + 0.5 * qSin(m_tGlobal * 4);
-    label(p, QRectF(0, 612, LW, 20), QStringLiteral("↑↓ 选择 · 回车开始 · B 进商店 · 点击卡片直接玩"),
+    label(p, QRectF(0, 612, LW, 20), QStringLiteral("↑↓ 选择 · 回车开始 · B 进商店 · M 静音 · 点击卡片直接玩"),
           12, QColor(255, 255, 255, 210), Qt::AlignHCenter, false, 0, a);
 }
 
