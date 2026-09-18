@@ -2,4 +2,7 @@
     <qresource prefix="/fonts">
         <file alias="NotoSansSC-UI-Subset.otf">assets/fonts/NotoSansSC-UI-Subset.otf</file>
     </qresource>
+    <qresource prefix="/icons">
+        <file alias="favicon.ico">assets/favicon.ico</file>
+    </qresource>
 </RCC>

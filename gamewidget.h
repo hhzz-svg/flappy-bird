@@ -9,6 +9,8 @@
 #include <QSet>
 #include <QElapsedTimer>
 
+#include <functional>
+
 class QTimer;
 class QKeyEvent;
 class QMouseEvent;
@@ -80,6 +82,8 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 
 private slots:
@@ -97,6 +101,7 @@ private:
 
     // --- lifecycle ---
     void resetRun();
+    void navigateTo(State s);   // switch screens (fades in); in-run flips assign m_state directly
     void startMode(int index);
     void flap();
     void die();
@@ -131,6 +136,16 @@ private:
     QRectF pauseResumeRect() const;
     QRectF pauseMenuRect() const;
 
+    // --- pointer hover ---
+    bool hoverActiveRegion(const QRectF &r) const;
+    void updateHoverCursor();
+    void syncHoverSelection();
+
+    // --- press feedback (mouse-driven only; keyboard confirm stays instant) ---
+    void triggerPress(const QRectF &r, std::function<void()> action);
+    qreal pressScale(const QRectF &r) const;
+    void withPressTransform(QPainter &p, const QRectF &r, const std::function<void()> &draw) const;
+
     // --- drawing ---
     void drawSky(QPainter &p);
     void drawPipes(QPainter &p);
@@ -160,6 +175,8 @@ private:
     static constexpr qreal PIPE_W   = 66.0;
     static constexpr qreal LASER_W  = 16.0;
     static constexpr qreal MAX_V    = 11.0;
+    static constexpr qreal PRESS_DURATION = 0.11;   // seconds
+    static constexpr qreal FADE_DURATION  = 0.18;   // seconds
 
     // State
     State m_state;
@@ -183,7 +200,7 @@ private:
     qreal m_groundOffset, m_bgOffset, m_tGlobal;
     int   m_score, m_runCoins, m_combo, m_bestCombo;
     qreal m_elapsedSec;
-    qreal m_screenShake, m_scorePop, m_flash;
+    qreal m_screenShake, m_scorePop, m_flash, m_screenFade;
     int   m_msSincePipe;
     bool  m_newRecord;
 
@@ -201,6 +218,15 @@ private:
 
     QTimer        *m_timer;
     QElapsedTimer  m_elapsed;
+
+    // pointer hover (logical coords; invalid while mouse is outside the widget)
+    QPointF m_mousePos;
+    bool    m_mouseInside;
+
+    // button press feedback; the action runs once the press animation finishes
+    QRectF  m_pressRect;
+    qreal   m_pressT;
+    std::function<void()> m_pressAction;
 };
 
 #endif
