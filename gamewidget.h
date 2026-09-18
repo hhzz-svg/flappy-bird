@@ -101,6 +101,7 @@ private:
 
     // --- lifecycle ---
     void resetRun();
+    void navigateTo(State s);   // switch screens (fades in); in-run flips assign m_state directly
     void startMode(int index);
     void flap();
     void die();
@@ -175,6 +176,7 @@ private:
     static constexpr qreal LASER_W  = 16.0;
     static constexpr qreal MAX_V    = 11.0;
     static constexpr qreal PRESS_DURATION = 0.11;   // seconds
+    static constexpr qreal FADE_DURATION  = 0.18;   // seconds
 
     // State
     State m_state;
@@ -198,7 +200,7 @@ private:
     qreal m_groundOffset, m_bgOffset, m_tGlobal;
     int   m_score, m_runCoins, m_combo, m_bestCombo;
     qreal m_elapsedSec;
-    qreal m_screenShake, m_scorePop, m_flash;
+    qreal m_screenShake, m_scorePop, m_flash, m_screenFade;
     int   m_msSincePipe;
     bool  m_newRecord;
 

@@ -108,6 +108,7 @@ GameWidget::GameWidget(QWidget *parent)
     , m_screenShake(0)
     , m_scorePop(0)
     , m_flash(0)
+    , m_screenFade(1.0)
     , m_msSincePipe(0)
     , m_newRecord(false)
     , m_gustActive(false)
@@ -206,11 +207,17 @@ void GameWidget::resetRun()
     m_gustDir = 0;
 }
 
+void GameWidget::navigateTo(State s)
+{
+    m_state = s;
+    m_screenFade = 1.0;
+}
+
 void GameWidget::startMode(int index)
 {
     m_modeIndex = index;
     resetRun();
-    m_state = Ready;
+    navigateTo(Ready);
 }
 
 void GameWidget::flap()
@@ -397,6 +404,7 @@ void GameWidget::tick()
     if (m_scorePop > 0)  m_scorePop  = qMax(0.0, m_scorePop - 0.06);
     if (m_screenShake > 0) { m_screenShake *= 0.9; if (m_screenShake < 0.4) m_screenShake = 0; }
     if (m_flash > 0)     m_flash     = qMax(0.0, m_flash - 0.04);
+    if (m_screenFade > 0) m_screenFade = qMax(0.0, m_screenFade - 0.0166 / FADE_DURATION);
     if (m_shopMsgLife > 0) m_shopMsgLife = qMax(0.0, m_shopMsgLife - 0.0166);
 
     if (m_state == Menu) {
@@ -511,7 +519,7 @@ void GameWidget::keyPressEvent(QKeyEvent *e)
     if (k == Qt::Key_M) { e->accept(); return; }  // (reserved / no-op: Qt build has no audio)
 
     if (k == Qt::Key_Escape) {
-        if (m_state != Menu) { m_state = Menu; update(); }
+        if (m_state != Menu) { navigateTo(Menu); update(); }
         else close();
         e->accept();
         return;
@@ -532,7 +540,7 @@ void GameWidget::keyPressEvent(QKeyEvent *e)
         if (up)        { m_menuIndex = (m_menuIndex - 1 + modes().size()) % modes().size(); }
         else if (down) { m_menuIndex = (m_menuIndex + 1) % modes().size(); }
         else if (confirm) { startMode(m_menuIndex); }
-        else if (k == Qt::Key_B) { m_state = Shop; }
+        else if (k == Qt::Key_B) { navigateTo(Shop); }
         update();
         return;
     }
@@ -579,7 +587,7 @@ void GameWidget::mousePressEvent(QMouseEvent *e)
         }
         const QRectF sb = menuShopBtnRect();
         if (sb.contains(p)) {
-            triggerPress(sb, [this] { m_state = Shop; });
+            triggerPress(sb, [this] { navigateTo(Shop); });
             update();
             return;
         }
@@ -588,7 +596,7 @@ void GameWidget::mousePressEvent(QMouseEvent *e)
     if (m_state == Shop) {
         const QRectF bk = shopBackRect();
         if (bk.contains(p)) {
-            triggerPress(bk, [this] { m_state = Menu; });
+            triggerPress(bk, [this] { navigateTo(Menu); });
             update();
             return;
         }
@@ -614,13 +622,13 @@ void GameWidget::mousePressEvent(QMouseEvent *e)
     if (m_state == Paused) {
         const QRectF rr = pauseResumeRect(), rm = pauseMenuRect();
         if (rr.contains(p)) { triggerPress(rr, [this] { m_state = Playing; }); update(); return; }
-        if (rm.contains(p)) { triggerPress(rm, [this] { m_state = Menu; });    update(); return; }
+        if (rm.contains(p)) { triggerPress(rm, [this] { navigateTo(Menu); }); update(); return; }
         return;
     }
     if (m_state == GameOver) {
         const QRectF rr = overRetryRect(), rm = overMenuRect();
         if (rr.contains(p)) { triggerPress(rr, [this] { startMode(m_modeIndex); }); update(); return; }
-        if (rm.contains(p)) { triggerPress(rm, [this] { m_state = Menu; });         update(); return; }
+        if (rm.contains(p)) { triggerPress(rm, [this] { navigateTo(Menu); });       update(); return; }
         return;
     }
     if (m_state == Ready) { m_state = Playing; flap(); }
@@ -733,13 +741,9 @@ QRectF GameWidget::pauseMenuRect() const       { return QRectF(LW / 2.0 - 90, LH
 // ==========================================================================
 static QFont uiFont(bool black = false)
 {
-#ifdef Q_OS_WASM
     QFont font = QApplication::font();
     font.setWeight(black ? QFont::Black : QFont::DemiBold);
     return font;
-#else
-    return QFont(QStringLiteral("Arial"), 10, black ? QFont::Black : QFont::DemiBold);
-#endif
 }
 
 void GameWidget::label(QPainter &p, const QRectF &r, const QString &t, int size,
@@ -801,6 +805,9 @@ void GameWidget::paintEvent(QPaintEvent *)
     case Paused:   drawHUD(p); drawPaused(p);   break;
     case GameOver: drawHUD(p); drawGameOver(p); break;
     }
+
+    if (m_screenFade > 0)
+        p.fillRect(QRectF(0, 0, LW, LH), QColor(6, 8, 18, int(m_screenFade * 190)));
 }
 
 // ---- background -----------------------------------------------------------
