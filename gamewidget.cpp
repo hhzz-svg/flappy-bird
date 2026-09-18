@@ -669,9 +669,14 @@ void GameWidget::mouseMoveEvent(QMouseEvent *e)
 {
     m_mousePos = toLogical(e->position());
     m_mouseInside = true;
+    const int menuBefore = m_menuIndex, shopBefore = m_shopIndex;
     syncHoverSelection();
     updateHoverCursor();
-    update();
+    // Menu and Shop are the only screens that render a hover state, and they
+    // only change when the highlighted item does; elsewhere the game timer is
+    // already repainting.
+    if (m_menuIndex != menuBefore || m_shopIndex != shopBefore)
+        update();
 }
 
 void GameWidget::leaveEvent(QEvent *)
@@ -795,22 +800,23 @@ void GameWidget::label(QPainter &p, const QRectF &r, const QString &t, int size,
 
 void GameWidget::paintEvent(QPaintEvent *)
 {
-    QPainter p(this);
+    // The scene is always rasterised at the logical 480x720 and then scaled onto
+    // the widget, so a large window costs one blit rather than several times the
+    // drawing work.
+    if (m_frame.size() != QSize(LW, LH))
+        m_frame = QImage(LW, LH, QImage::Format_RGB32);
+
+    QPainter p(&m_frame);
     p.setRenderHint(QPainter::Antialiasing, true);
     p.setRenderHint(QPainter::SmoothPixmapTransform, true);
     p.setRenderHint(QPainter::TextAntialiasing, true);
 
-    const qreal s = qMin(width() / qreal(LW), height() / qreal(LH));
-    const qreal offX = (width()  - LW * s) / 2.0;
-    const qreal offY = (height() - LH * s) / 2.0;
-
-    p.fillRect(rect(), QColor(18, 20, 40));
-    p.translate(offX, offY);
-    p.scale(s, s);
-    p.setClipRect(0, 0, LW, LH);
-
-    if (m_screenShake > 0)
+    if (m_screenShake > 0) {
+        // Shaking shifts the scene, so the strip it uncovers would otherwise
+        // show last frame's pixels; the buffer is not cleared between frames.
+        p.fillRect(m_frame.rect(), QColor(18, 20, 40));
         p.translate(frand(-1, 1) * m_screenShake, frand(-1, 1) * m_screenShake);
+    }
 
     drawSky(p);
     drawPipes(p);
@@ -843,6 +849,17 @@ void GameWidget::paintEvent(QPaintEvent *)
 
     if (m_screenFade > 0)
         p.fillRect(QRectF(0, 0, LW, LH), QColor(6, 8, 18, int(m_screenFade * 190)));
+
+    p.end();
+
+    const qreal s = qMin(width() / qreal(LW), height() / qreal(LH));
+    const qreal offX = (width()  - LW * s) / 2.0;
+    const qreal offY = (height() - LH * s) / 2.0;
+
+    QPainter screen(this);
+    screen.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    screen.fillRect(rect(), QColor(18, 20, 40));
+    screen.drawImage(QRectF(offX, offY, LW * s, LH * s), m_frame, QRectF(0, 0, LW, LH));
 }
 
 // ---- background -----------------------------------------------------------
@@ -856,13 +873,83 @@ static void skyStops(const QString &id, QColor &a, QColor &b, QColor &c)
     else                                  { a = QColor( 74,166,232); b = QColor(143,208,240); c = QColor(216,240,248); }
 }
 
+// Clouds, hills and the sun were over half of every frame: large antialiased
+// translucent shapes are expensive to rasterise, and they are identical from
+// frame to frame apart from where they sit. Draw each once into a pixmap and
+// blit it instead.
+void GameWidget::rebuildSceneCache()
+{
+    const QString id = mode().id;
+    if (m_cacheModeId == id && !m_cloudSprite.isNull()) return;
+    m_cacheModeId = id;
+
+    const bool dark = (id == QLatin1String("night") || id == QLatin1String("storm") || id == QLatin1String("laser"));
+
+    // one cloud, drawn at 2x so it stays smooth when scaled up
+    const qreal ss = 2.0;
+    m_cloudSprite = QPixmap(qRound(96 * ss), qRound(46 * ss));
+    m_cloudSprite.fill(Qt::transparent);
+    {
+        QPainter cp(&m_cloudSprite);
+        cp.setRenderHint(QPainter::Antialiasing, true);
+        cp.scale(ss, ss);
+        cp.translate(26, 25);            // sprite origin -> the cloud's anchor point
+        cp.setPen(Qt::NoPen);
+        cp.setBrush(dark ? QColor(90,106,144,40) : QColor(255,255,255,216));
+        cp.drawEllipse(QPointF(0,  0), 26, 17);
+        cp.drawEllipse(QPointF(22, -7), 22, 18);
+        cp.drawEllipse(QPointF(44, 0), 26, 16);
+        cp.drawEllipse(QPointF(20, 6), 30, 15);
+    }
+
+    // the hill row, tiled horizontally as it scrolls
+    const qreal hy = LH - GROUND_H;
+    m_hillsLayer = QPixmap(qRound(HILL_SPAN), qRound(hy));
+    m_hillsLayer.fill(Qt::transparent);
+    {
+        QPainter hp(&m_hillsLayer);
+        hp.setRenderHint(QPainter::Antialiasing, true);
+        hp.setPen(Qt::NoPen);
+        hp.setBrush(dark ? QColor(255,255,255,13) : QColor(255,255,255,30));
+        for (const auto &h : m_hills) {
+            const qreal base = std::fmod(h.x, HILL_SPAN);
+            for (const qreal hx : { base - HILL_SPAN, base, base + HILL_SPAN }) {
+                QPainterPath path;                       // draw the seam copies too
+                path.moveTo(hx - h.w, hy);
+                path.quadTo(hx, hy - h.h, hx + h.w, hy);
+                path.closeSubpath();
+                hp.drawPath(path);
+            }
+        }
+    }
+
+    m_sunSprite = QPixmap(132, 132);
+    m_sunSprite.fill(Qt::transparent);
+    {
+        QPainter sp(&m_sunSprite);
+        sp.setRenderHint(QPainter::Antialiasing, true);
+        QRadialGradient gr(66, 66, 66);
+        if (dark)                              { gr.setColorAt(0, QColor(235,240,255,240)); gr.setColorAt(0.5, QColor(190,205,240,90)); gr.setColorAt(1, QColor(190,205,240,0)); }
+        else if (id == QLatin1String("turbo")) { gr.setColorAt(0, QColor(255,240,180,240)); gr.setColorAt(0.55, QColor(255,150,90,90)); gr.setColorAt(1, QColor(255,150,90,0)); }
+        else                                   { gr.setColorAt(0, QColor(255,248,210,240)); gr.setColorAt(0.55, QColor(255,225,150,90)); gr.setColorAt(1, QColor(255,225,150,0)); }
+        sp.setPen(Qt::NoPen);
+        sp.setBrush(gr);
+        sp.drawEllipse(QPointF(66, 66), 66, 66);
+    }
+}
+
 void GameWidget::drawSky(QPainter &p)
 {
+    rebuildSceneCache();
+
     QColor a, b, c;
     skyStops(mode().id, a, b, c);
     QLinearGradient g(0, 0, 0, LH - GROUND_H);
     g.setColorAt(0.0, a); g.setColorAt(0.55, b); g.setColorAt(1.0, c);
+    const bool wasAA = p.testRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::Antialiasing, false);   // plain axis-aligned fill
     p.fillRect(QRectF(0, 0, LW, LH), g);
+    p.setRenderHint(QPainter::Antialiasing, wasAA);
 
     const QString id = mode().id;
     const bool dark = (id == QLatin1String("night") || id == QLatin1String("storm") || id == QLatin1String("laser"));
@@ -877,36 +964,17 @@ void GameWidget::drawSky(QPainter &p)
         }
     }
 
-    // sun / moon
-    const qreal cx = LW - 86, cy = 104;
-    QRadialGradient gr(cx, cy, 66);
-    if (dark)                       { gr.setColorAt(0, QColor(235,240,255,240)); gr.setColorAt(0.5, QColor(190,205,240,90)); gr.setColorAt(1, QColor(190,205,240,0)); }
-    else if (id == QLatin1String("turbo")) { gr.setColorAt(0, QColor(255,240,180,240)); gr.setColorAt(0.55, QColor(255,150,90,90)); gr.setColorAt(1, QColor(255,150,90,0)); }
-    else                            { gr.setColorAt(0, QColor(255,248,210,240)); gr.setColorAt(0.55, QColor(255,225,150,90)); gr.setColorAt(1, QColor(255,225,150,0)); }
-    p.setPen(Qt::NoPen); p.setBrush(gr);
-    p.drawEllipse(QPointF(cx, cy), 66, 66);
+    p.drawPixmap(QPointF(LW - 86 - 66, 104 - 66), m_sunSprite);
 
-    // parallax hills
-    p.setBrush(dark ? QColor(255,255,255,13) : QColor(255,255,255,30));
-    const qreal hy = LH - GROUND_H;
-    for (const auto &h : m_hills) {
-        qreal hx = std::fmod(h.x - m_bgOffset * 0.4, LW + 200.0);
-        if (hx < -200) hx += LW + 200;
-        QPainterPath path;
-        path.moveTo(hx - h.w, hy);
-        path.quadTo(hx, hy - h.h, hx + h.w, hy);
-        path.closeSubpath();
-        p.drawPath(path);
-    }
+    qreal scroll = std::fmod(m_bgOffset * 0.4, HILL_SPAN);
+    if (scroll < 0) scroll += HILL_SPAN;
+    p.drawPixmap(QPointF(-scroll, 0), m_hillsLayer);
+    p.drawPixmap(QPointF(HILL_SPAN - scroll, 0), m_hillsLayer);
 
-    // clouds
     for (const auto &cl : m_clouds) {
-        p.setBrush(dark ? QColor(90,106,144,40) : QColor(255,255,255,216));
         const qreal sc = cl.scale;
-        p.drawEllipse(QPointF(cl.x,          cl.y),         26 * sc, 17 * sc);
-        p.drawEllipse(QPointF(cl.x + 22 * sc, cl.y - 7 * sc), 22 * sc, 18 * sc);
-        p.drawEllipse(QPointF(cl.x + 44 * sc, cl.y),         26 * sc, 16 * sc);
-        p.drawEllipse(QPointF(cl.x + 20 * sc, cl.y + 6 * sc), 30 * sc, 15 * sc);
+        p.drawPixmap(QRectF(cl.x - 26 * sc, cl.y - 25 * sc, 96 * sc, 46 * sc), m_cloudSprite,
+                     QRectF(m_cloudSprite.rect()));
     }
 }
 
