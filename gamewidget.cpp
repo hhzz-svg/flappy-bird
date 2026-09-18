@@ -597,6 +597,7 @@ void GameWidget::mouseMoveEvent(QMouseEvent *e)
 {
     m_mousePos = toLogical(e->position());
     m_mouseInside = true;
+    syncHoverSelection();
     updateHoverCursor();
     update();
 }
@@ -612,6 +613,17 @@ void GameWidget::leaveEvent(QEvent *)
 bool GameWidget::hoverActiveRegion(const QRectF &r) const
 {
     return m_mouseInside && r.contains(m_mousePos);
+}
+
+void GameWidget::syncHoverSelection()
+{
+    if (m_state == Menu) {
+        for (int i = 0; i < modes().size(); ++i)
+            if (menuCardRect(i).contains(m_mousePos)) { m_menuIndex = i; return; }
+    } else if (m_state == Shop) {
+        for (int i = 0; i < skins().size(); ++i)
+            if (shopItemRect(i).contains(m_mousePos)) { m_shopIndex = i; return; }
+    }
 }
 
 void GameWidget::updateHoverCursor()
@@ -1113,17 +1125,16 @@ void GameWidget::drawMenu(QPainter &p)
         const GameMode &m = modes()[i];
         const QRectF r = menuCardRect(i);
         const bool sel = (i == m_menuIndex);
-        const bool hov = hoverActiveRegion(r);
         const qreal pulse = sel ? (0.5 + 0.5 * qSin(m_tGlobal * 5)) : 0;
 
         p.setPen(Qt::NoPen);
-        p.setBrush(sel ? QColor(22, 28, 54, 210) : hov ? QColor(30, 37, 68, 190) : QColor(22, 28, 54, 145));
-        p.drawRoundedRect(hov && !sel ? r.adjusted(-2, -2, 2, 2) : r, 15, 15);
-        QColor bc = sel ? m.accent : hov ? QColor(255, 255, 255, 130) : QColor(255, 255, 255, 46);
-        bc.setAlphaF(sel ? (0.7 + pulse * 0.3) : hov ? 0.6 : 0.4);
-        p.setPen(QPen(bc, sel ? 2.4 : hov ? 1.8 : 1.2));
+        p.setBrush(sel ? QColor(22, 28, 54, 210) : QColor(22, 28, 54, 145));
+        p.drawRoundedRect(r, 15, 15);
+        QColor bc = sel ? m.accent : QColor(255, 255, 255, 46);
+        bc.setAlphaF(sel ? (0.7 + pulse * 0.3) : 0.4);
+        p.setPen(QPen(bc, sel ? 2.4 : 1.2));
         p.setBrush(Qt::NoBrush);
-        p.drawRoundedRect(hov && !sel ? r.adjusted(-2, -2, 2, 2) : r, 15, 15);
+        p.drawRoundedRect(r, 15, 15);
 
         // icon chip
         QColor chip = m.accent; chip.setAlphaF(0.22);
@@ -1174,16 +1185,14 @@ void GameWidget::drawShop(QPainter &p)
         const bool owned = m_owned.contains(s.id);
         const bool equipped = (s.id == m_skinId);
         const bool sel = (i == m_shopIndex);
-        const bool hov = hoverActiveRegion(r);
 
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(255, 255, 255, equipped ? 34 : hov ? 30 : 20));
+        p.setBrush(QColor(255, 255, 255, equipped ? 34 : 20));
         p.drawRoundedRect(r, 14, 14);
         QColor border = equipped ? QColor(126, 232, 176)
                        : sel     ? QColor(255, 255, 255, 200)
-                       : hov     ? QColor(255, 255, 255, 150)
                                  : QColor(255, 255, 255, 46);
-        p.setPen(QPen(border, equipped || sel ? 2.4 : hov ? 1.8 : 1.2));
+        p.setPen(QPen(border, equipped || sel ? 2.4 : 1.2));
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(r, 14, 14);
 

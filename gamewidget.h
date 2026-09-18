@@ -136,6 +136,7 @@ private:
     // --- pointer hover ---
     bool hoverActiveRegion(const QRectF &r) const;
     void updateHoverCursor();
+    void syncHoverSelection();
 
     // --- drawing ---
     void drawSky(QPainter &p);
