@@ -248,3 +248,99 @@
 - `README.md`：移除部署文档链接，保留在线游玩地址。
 - `progress.md`：追加删除范围、验证和回滚记录。
 - 回滚方式：执行 `git revert (git log --grep='^docs: remove remaining docs$' -1 --format='%H')`。
+
+## 2026-09-17 - Task: 为所有可点击 UI 增加鼠标悬停反馈
+
+### What was done
+
+- 菜单卡片、皮肤商店按钮、商店格子与返回按钮、暂停与结算界面的按钮，在鼠标悬停时加亮边框与背景。
+- 悬停可点击区域时光标变为手型，鼠标移出窗口时恢复。
+
+### Testing
+
+- Qt 6.4.2 桌面 Release 构建通过，零警告零错误。
+- 逐一核对八处可点击区域的绘制分支与 `hoverActiveRegion` 判定一致。
+
+### Notes
+
+- `gamewidget.h`、`gamewidget.cpp`：新增 `mouseMoveEvent`/`leaveEvent`、`hoverActiveRegion`、`updateHoverCursor` 与悬停坐标成员。
+- `progress.md`：追加本轮实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^feat: add mouse hover feedback to all UI buttons$' -1 --format='%H')`。
+
+## 2026-09-17 - Task: 修复悬停高亮与键盘选中不同步
+
+### What was done
+
+- 鼠标悬停菜单卡片或商店格子时同步更新 `m_menuIndex`/`m_shopIndex`，使高亮项与回车/点击实际生效项始终一致。
+- 由于悬停后必然等于选中态，移除上一轮引入的、永远不会触发的独立悬停样式分支。
+
+### Testing
+
+- Qt 6.4.2 桌面 Release 构建通过，零警告零错误。
+- 核对键盘导航路径未受影响：`syncHoverSelection` 只在 `mouseMoveEvent` 中触发。
+
+### Notes
+
+- `gamewidget.h`、`gamewidget.cpp`：新增 `syncHoverSelection`，简化 `drawMenu`/`drawShop` 的高亮分支。
+- `progress.md`：追加本轮实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^fix: sync mouse hover with keyboard selection in menu/shop$' -1 --format='%H')`。
+
+## 2026-09-18 - Task: 为 UI 按钮增加按下反馈动画
+
+### What was done
+
+- 点击按钮时播放 110ms 的缩放下压回弹动画，动画结束后再执行对应动作。
+- 因为多数按钮点击后立即切换画面，采用延迟执行模型，否则动画来不及显示。
+- 键盘确认与游戏中点击起飞保持即时响应，不走该路径。
+
+### Testing
+
+- Qt 6.4.2 桌面 Release 构建通过，零警告零错误。
+- 离屏运行测试连跑三次结果一致：卡片宽度 396→362 像素下压后回弹，约 110ms 后进入游戏；键盘回车仍为瞬时生效。
+
+### Notes
+
+- `gamewidget.h`、`gamewidget.cpp`：新增 `triggerPress`/`pressScale`/`withPressTransform` 与 `PRESS_DURATION`，八处按钮绘制套用按下变换。
+- `progress.md`：追加本轮实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^feat: add press feedback animation to UI buttons$' -1 --format='%H')`。
+
+## 2026-09-18 - Task: 界面切换增加淡入过渡
+
+### What was done
+
+- 导航类切换（进游戏、进商店、返回菜单、再来一局、启动首屏）后新界面从暗色淡入，时长 180ms。
+- 游戏内状态翻转（起飞、暂停与恢复、死亡）保持瞬时，避免手感变钝。
+
+### Testing
+
+- Qt 6.4.2 桌面 Release 构建通过，零警告零错误。
+- 离屏测试：导航后画面平均亮度 77.9 → 156.0，证明淡入生效并完全消散；暂停恢复瞬间亮度 189.5 对比稍后 189.4，证明游戏内翻转未被加过渡。
+
+### Notes
+
+- `gamewidget.h`、`gamewidget.cpp`：新增 `navigateTo` 与 `m_screenFade`/`FADE_DURATION`，`paintEvent` 末尾叠加全画布遮罩。
+- `progress.md`：追加本轮实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^feat: fade in screens on navigation$' -1 --format='%H')`。
+
+## 2026-09-18 - Task: 桌面版启用内嵌中文字体与窗口图标
+
+### What was done
+
+- 内嵌的 Noto Sans SC 字形子集从 WebAssembly 专用改为所有平台生效，`uiFont()` 不再按平台分支，移除 Arial 回退。
+- 原生窗口设置应用图标，复用已有的 `assets/favicon.ico`（ICO 由 QtGui 内置处理，不引入 Qt SVG 模块依赖）。
+
+### Testing
+
+- Qt 6.4.2 桌面 Release 构建通过，零警告零错误。
+- 离屏测试断言通过：资源已编入桌面构建、应用字体族为 Noto Sans CJK SC、包含中文与星号字形、ICO 图标含三种尺寸。
+- 已复核 `tools/verify-wasm-ui.ps1` 依赖的四个字面量仍存在，且工作流无需改动。
+
+### Notes
+
+- `FlappyBird.pro`：资源改为无条件编入。
+- `resources.qrc`：新增 `/icons` 前缀的 `favicon.ico`。
+- `main.cpp`：字体注册去掉 WASM 条件，新增 `setWindowIcon`。
+- `gamewidget.cpp`：`uiFont()` 统一使用应用字体。
+- `README.md`：更新资源说明。
+- `progress.md`：追加本轮实现与验证记录。
+- 回滚方式：执行 `git revert (git log --grep='^feat: use the bundled CJK font and a window icon on desktop$' -1 --format='%H')`。
