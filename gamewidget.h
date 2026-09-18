@@ -5,6 +5,8 @@
 #include <QVector>
 #include <QString>
 #include <QColor>
+#include <QImage>
+#include <QPixmap>
 #include <QRectF>
 #include <QSet>
 #include <QElapsedTimer>
@@ -151,6 +153,7 @@ private:
     void withPressTransform(QPainter &p, const QRectF &r, const std::function<void()> &draw) const;
 
     // --- drawing ---
+    void rebuildSceneCache();   // clouds/hills/sun are costly to rasterise every frame
     void drawSky(QPainter &p);
     void drawPipes(QPainter &p);
     void drawLasers(QPainter &p);
@@ -181,6 +184,7 @@ private:
     static constexpr qreal MAX_V    = 11.0;
     static constexpr qreal PRESS_DURATION = 0.11;   // seconds
     static constexpr qreal FADE_DURATION  = 0.18;   // seconds
+    static constexpr qreal HILL_SPAN      = LW + 200.0;   // parallax wrap period
 
     // State
     State m_state;
@@ -231,6 +235,15 @@ private:
     QRectF  m_pressRect;
     qreal   m_pressT;
     std::function<void()> m_pressAction;
+
+    // fixed-resolution render target, so cost does not grow with window size
+    QImage m_frame;
+
+    // pre-rendered scene layers, rebuilt when the mode's theme changes
+    QPixmap m_cloudSprite;
+    QPixmap m_hillsLayer;
+    QPixmap m_sunSprite;
+    QString m_cacheModeId;
 };
 
 #endif
