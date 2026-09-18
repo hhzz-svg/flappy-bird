@@ -11,7 +11,5 @@ SOURCES += \
 HEADERS += \
     gamewidget.h
 
-wasm {
-    RESOURCES += \
-        resources.qrc
-}
+RESOURCES += \
+    resources.qrc
