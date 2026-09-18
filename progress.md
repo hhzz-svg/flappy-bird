@@ -344,3 +344,31 @@
 - `README.md`：更新资源说明。
 - `progress.md`：追加本轮实现与验证记录。
 - 回滚方式：执行 `git revert (git log --grep='^feat: use the bundled CJK font and a window icon on desktop$' -1 --format='%H')`。
+
+## 2026-09-18 - Task: 为 Qt 版加入程序化音效
+
+### What was done
+
+- 新增 `sfx.h`/`sfx.cpp` 音效层：WebAssembly 经 emscripten 调浏览器 Web Audio，桌面用 `QAudioSink` 加自写软件混音；两者都不需要音频素材，音色参数照搬网页增强版的合成器。
+- 接入拍翅膀、得分、每 10 分里程碑、吃金币、坠毁、界面点击、风暴闪电、购买成功与金币不足九种音效。
+- `Qt::Key_M` 从占位改为真正的静音开关，设置经 `QSettings` 持久化，取消静音时播放确认音；菜单快捷键提示补充 `M 静音`，静音时界面显示标记。
+- 商店的购买/装备逻辑此前在键盘与鼠标两条路径重复，抽成 `purchaseOrEquip(int)`，音效只接一处。
+- 字体子集补入"静""音"两个字形并同步更新 `SOURCE.md` 的体积与校验值。
+
+### Testing
+
+- Qt 6.4.2 桌面 Release 构建通过，零警告零错误；另单独验证未安装 Qt Multimedia 时的静默降级分支可编译。
+- 离屏行为测试 16 项全过：九种事件各自触发正确音效；鼠标点击只触发一次提示音（延迟执行的 `navigateTo` 不重复发声）；键鼠两条购买路径结果完全一致（皮肤与金币余额相同）；金币不足触发拒绝音；静音可切换、可抑制发声、可跨重启持久化。
+- 桌面合成器单独测试 11 项全过：50ms 延迟内静音、峰值 15830 未超过请求音量、包络衰减至 21、结束后与空闲时均为纯静音、三种波形取值均在范围内。
+- 字体覆盖率断言：源码 190 个字符全部命中子集；`tools/verify-wasm-ui.ps1` 依赖的四个字面量与禁用 emoji 规则复核通过。
+
+### Notes
+
+- `sfx.h`、`sfx.cpp`：新增音效层。
+- `FlappyBird.pro`：加入音效源码；桌面端在 `qtHaveModule(multimedia)` 成立时启用 `FB_DESKTOP_AUDIO`，缺少该模块仍可构建（静默）。
+- `gamewidget.h`、`gamewidget.cpp`：音效接入点、静音开关与持久化、`purchaseOrEquip` 重构、静音标记与快捷键提示。
+- `assets/fonts/NotoSansSC-UI-Subset.otf`、`assets/fonts/subset-glyphs.txt`、`assets/fonts/SOURCE.md`：补入静音标签所需字形并更新校验值。
+- `README.md`：更新 Qt 版音效说明与操作表。
+- `progress.md`：追加本轮实现与验证记录。
+- WebAssembly 端未新增 Qt 模块依赖，CI 工具链无需改动。
+- 回滚方式：执行 `git revert (git log --grep='^feat: add procedural sound effects$' -1 --format='%H')`。
