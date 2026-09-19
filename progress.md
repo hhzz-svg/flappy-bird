@@ -424,3 +424,26 @@
 - `README.md`、`progress.md`：更新音效说明与本轮记录。
 - 实际听感需人工确认：容器内无音频设备。
 - 回滚方式：执行 `git revert (git log --grep='^feat: replace synthesised cues with CC0 arcade samples$' -1 --format='%H')`。
+
+## 2026-09-19 - Task: 手机访问分流到 HTML 版
+
+### What was done
+
+- 确认手机端掉帧与托管无关：Qt WebAssembly 的 QWidget 走软件光栅化，用不到 GPU，手机 CPU 扛不住，属架构限制。
+- Pages 首页注入分流脚本：触屏且屏幕短边小于 820 的设备改用原生 Canvas 的 `enhanced.html`，桌面继续使用 Qt WebAssembly 版，`?qt=1` 为逃生口。
+- 同时注入此前缺失的 viewport meta，避免未命中分流规则的移动设备按约 980px 虚拟宽度布局。
+- HTML 版页脚增加回到 Qt 桌面版的链接，两版互通。
+
+### Testing
+
+- Playwright 真实浏览器验证 5 种场景全部符合预期：iPhone 13 与 Pixel 7 跳转到 HTML 版；1280×800 桌面与 1920×1080 触摸屏笔记本留在 Qt 版；手机带 `?qt=1` 留在 Qt 版。
+- 测试脚本直接从工作流中提取待注入的脚本再执行，避免测试与实际部署内容走偏。
+- 工作流增加两条断言，确认 viewport 与分流脚本确实注入成功。
+
+### Notes
+
+- `.github/workflows/deploy-pages.yml`：注入 viewport 与分流脚本并增加产物断言。
+- `flappy-bird-enhanced.html`：页脚增加 Qt 桌面版链接与对应样式。
+- `progress.md`：追加本轮记录。
+- 已知缺口：HTML 版暂缺激光模式与皮肤商店，手机用户会少这两项玩法，下一轮补齐。
+- 回滚方式：执行 `git revert (git log --grep='^feat: send phones to the native-canvas build$' -1 --format='%H')`。
