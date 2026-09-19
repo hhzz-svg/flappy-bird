@@ -74,21 +74,25 @@ jobs:
           # Qt's shell ships no viewport tag, so phones lay the page out at a
           # ~980px virtual width and scale it down.
           viewport = '    <meta name="viewport" content="width=device-width, initial-scale=1">\n'
-          if "name=\"viewport\"" not in html:
+          if 'name="viewport"' not in html:
               html = html.replace("</head>", viewport + "</head>", 1)
 
           # Qt WebAssembly rasterises QWidget content in software, which phone
           # CPUs cannot keep up with. Touch devices get the native-canvas build
           # instead; ?qt=1 overrides that.
-          redirect = """    <script>
-      (function () {
-        if (/[?&]qt=1/.test(location.search)) return;
-        var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
-        var small = Math.min(screen.width, screen.height) < 820;
-        if (coarse && small) location.replace('enhanced.html');
-      })();
-    </script>
-"""
+          # Built line by line: every line here has to stay indented inside the
+          # YAML block scalar, so a triple-quoted string will not do.
+          redirect = "\n".join([
+              '    <script>',
+              '      (function () {',
+              '        if (/[?&]qt=1/.test(location.search)) return;',
+              "        var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;",
+              '        var small = Math.min(screen.width, screen.height) < 820;',
+              "        if (coarse && small) location.replace('enhanced.html');",
+              '      })();',
+              '    </script>',
+              '',
+          ])
           if "enhanced.html" not in html:
               html = html.replace("</head>", redirect + "</head>", 1)
 
