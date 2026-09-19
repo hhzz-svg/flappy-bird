@@ -218,8 +218,31 @@
       gravity: 0.44, jump: -7.6, gap: 190, speed: 2.75, spawn: 100,
       scoreMul: 1.8, ramp: 0.7, movingPipes: true, fog: false, storm: true, coinRate: 0.5,
     },
+    {
+      id: 'laser', name: '激光', icon: '🔺',
+      desc: '移动激光门 · 抓准间隙',
+      accent: '#ff5078', birdColor: '#ff7a9c',
+      gravity: 0.4, jump: -7.3, gap: 176, speed: 2.5, spawn: 105,
+      scoreMul: 2, ramp: 0.5, movingPipes: false, fog: false, storm: false,
+      lasers: true, coinRate: 0.55,
+    },
   ];
   function modeById(id) { return MODES.find(m => m.id === id) || MODES[0]; }
+
+  // ==========================================================================
+  //  Bird skins  (bought with the coins collected while flying)
+  // ==========================================================================
+  const SKINS = [
+    { id: 'default', name: '经典黄', cost: 0,   color: '#ffd93d', glow: false, rainbow: false },
+    { id: 'red',     name: '赤焰',   cost: 20,  color: '#ff5a3c', glow: false, rainbow: false },
+    { id: 'blue',    name: '蔚蓝',   cost: 20,  color: '#5aa0ff', glow: false, rainbow: false },
+    { id: 'green',   name: '青柠',   cost: 30,  color: '#63d6a0', glow: false, rainbow: false },
+    { id: 'purple',  name: '魅紫',   cost: 40,  color: '#c58bff', glow: false, rainbow: false },
+    { id: 'neon',    name: '霓虹',   cost: 60,  color: '#8ce0ff', glow: true,  rainbow: false },
+    { id: 'gold',    name: '黄金',   cost: 100, color: '#ffc83c', glow: false, rainbow: false },
+    { id: 'rainbow', name: '彩虹',   cost: 200, color: '#ffffff', glow: true,  rainbow: true  },
+  ];
+  function skinById(id) { return SKINS.find(s => s.id === id) || SKINS[0]; }
 
   // ==========================================================================
   //  Persistent storage  (per-mode best + lifetime coins)
@@ -232,6 +255,24 @@
     lifetimeCoins += n;
     localStorage.setItem('fb_coins', String(lifetimeCoins));
   }
+  function spendCoins(n) {
+    lifetimeCoins = Math.max(0, lifetimeCoins - n);
+    localStorage.setItem('fb_coins', String(lifetimeCoins));
+  }
+
+  let ownedSkins = (function () {
+    try {
+      const raw = JSON.parse(localStorage.getItem('fb_skins_owned') || '[]');
+      return Array.isArray(raw) ? raw.filter(id => SKINS.some(s => s.id === id)) : [];
+    } catch (e) { return []; }
+  })();
+  if (ownedSkins.indexOf('default') < 0) ownedSkins.push('default');
+  let skinId = localStorage.getItem('fb_skin') || 'default';
+  if (ownedSkins.indexOf(skinId) < 0) skinId = 'default';
+  function saveSkins() {
+    localStorage.setItem('fb_skins_owned', JSON.stringify(ownedSkins));
+    localStorage.setItem('fb_skin', skinId);
+  }
 
   // ==========================================================================
   //  Constants
@@ -240,9 +281,10 @@
   const BIRD_X = 118;
   const BIRD_R = 17;
   const PIPE_W = 66;
+  const LASER_W = 16;
   const MAX_V = 11;
 
-  const STATE = { MENU: 0, READY: 1, PLAYING: 2, PAUSED: 3, OVER: 4 };
+  const STATE = { MENU: 0, READY: 1, PLAYING: 2, PAUSED: 3, OVER: 4, SHOP: 5 };
 
   // ==========================================================================
   //  Mutable game state
@@ -252,7 +294,8 @@
   let menuIndex = 0;
 
   let birdY = H / 2, birdVy = 0, birdRot = 0;
-  let pipes = [], coins = [], particles = [], floaters = [];
+  let pipes = [], lasers = [], coins = [], particles = [], floaters = [];
+  let shopIndex = 0, shopMsg = '', shopMsgLife = 0;
   let spawnAcc = 0, groundOffset = 0, bgOffset = 0;
   let score = 0, runCoins = 0, combo = 0, bestCombo = 0;
   let elapsed = 0;             // seconds survived this run
@@ -324,14 +367,34 @@
     pipes.push(p);
     // maybe drop a coin in the gap
     if (Math.random() < mode.coinRate) {
-      coins.push({
-        pipe: p,
-        offY: (Math.random() - 0.5) * (gap - 46),
-        collected: false, spin: 0,
-      });
+      dropCoin(p.x + PIPE_W / 2 + 40, baseTop + gap / 2 + (Math.random() - 0.5) * (gap - 46));
     }
   }
   function pipeTop(p) { return p.baseTop + (p.amp ? Math.sin(tGlobal * p.freq + p.phase) * p.amp : 0); }
+
+  // Coins carry their own position rather than riding a pipe, so laser mode can
+  // drop them too.
+  function dropCoin(x, y) { coins.push({ x, y, collected: false, spin: 0 }); }
+
+  // Laser gates: a vertically drifting gap that blinks off now and then, and is
+  // safe to fly through while it is off.
+  function spawnLaser() {
+    const gap = curGap();
+    const amp = 40 + Math.random() * 40 + Math.min(40, score);
+    const minC = 90 + amp;
+    const maxC = H - GROUND_H - 90 - amp;
+    const l = {
+      x: W + LASER_W,
+      baseCenter: minC + Math.random() * Math.max(1, maxC - minC),
+      gap, scored: false,
+      amp, phase: Math.random() * Math.PI * 2, freq: 0.7 + Math.random() * 0.5,
+      blink: Math.random() * 2.5,
+    };
+    lasers.push(l);
+    if (Math.random() < mode.coinRate) dropCoin(l.x + 40, l.baseCenter);
+  }
+  function laserCenter(l) { return l.baseCenter + Math.sin(tGlobal * l.freq + l.phase) * l.amp; }
+  function laserOn(l) { return (l.blink % 2.5) < 2.0; }   // ~2.0s on, ~0.5s off
 
   function spawnParticles(x, y, n, colors, spread = 5) {
     for (let i = 0; i < n; i++) {
@@ -354,7 +417,7 @@
   // ==========================================================================
   function resetRun() {
     birdY = H / 2 - 30; birdVy = 0; birdRot = 0;
-    pipes = []; coins = []; particles = []; floaters = [];
+    pipes = []; lasers = []; coins = []; particles = []; floaters = [];
     spawnAcc = 0; groundOffset = 0;
     score = 0; runCoins = 0; combo = 0; bestCombo = 0;
     elapsed = 0; screenShake = 0; scorePop = 0; flash = 0; newRecord = false;
@@ -367,6 +430,17 @@
     state = STATE.READY;
     initAudio();
     sfx.select();
+  }
+
+  function onScore() {
+    score += Math.round(mode.scoreMul);
+    scorePop = 1;
+    sfx.point();
+    if (score > 0 && score % 10 === 0) {
+      sfx.milestone();
+      spawnParticles(W / 2, H * 0.4, 26, [mode.accent, '#ffd93d', '#ffffff'], 6);
+      screenShake = Math.max(screenShake, 6);
+    }
   }
 
   function flap() {
@@ -404,6 +478,13 @@
       if (circleRectHit(BIRD_X, birdY, r, p.x, -50, PIPE_W, top + 50)) return true;
       const by = top + p.gap;
       if (circleRectHit(BIRD_X, birdY, r, p.x, by, PIPE_W, H)) return true;
+    }
+    for (const l of lasers) {
+      if (!laserOn(l)) continue;                 // safe to pass while dark
+      if (l.x + LASER_W < BIRD_X - r || l.x > BIRD_X + r) continue;
+      const c = laserCenter(l);
+      if (circleRectHit(BIRD_X, birdY, r, l.x, -50, LASER_W, c - l.gap / 2 + 50)) return true;
+      if (circleRectHit(BIRD_X, birdY, r, l.x, c + l.gap / 2, LASER_W, H)) return true;
     }
     return false;
   }
@@ -443,6 +524,10 @@
       bgOffset += 0.3 * dt;
       return;
     }
+    if (state === STATE.SHOP) {
+      if (shopMsgLife > 0) shopMsgLife = Math.max(0, shopMsgLife - dt / 60);
+      return;
+    }
     if (state === STATE.READY) {
       birdY = H / 2 - 30 + Math.sin(tGlobal * 4) * 8;
       return;
@@ -478,37 +563,36 @@
     const targetRot = Math.max(-0.5, Math.min(1.0, birdVy * 0.09));
     birdRot += (targetRot - birdRot) * Math.min(1, 0.15 * dt);
 
-    // spawn pipes
+    // spawn obstacles
     spawnAcc += dt;
-    if (spawnAcc >= curSpawn()) { spawnAcc = 0; spawnPipe(); }
+    if (spawnAcc >= curSpawn()) {
+      spawnAcc = 0;
+      if (mode.lasers) spawnLaser(); else spawnPipe();
+    }
 
     const sp = curSpeed();
     for (let i = pipes.length - 1; i >= 0; i--) {
       const p = pipes[i];
       p.x -= sp * dt;
-      if (!p.scored && p.x + PIPE_W < BIRD_X) {
-        p.scored = true;
-        const gain = Math.round(mode.scoreMul);
-        score += gain;
-        scorePop = 1;
-        sfx.point();
-        if (score > 0 && score % 10 === 0) {
-          sfx.milestone();
-          spawnParticles(W / 2, H * 0.4, 26, [mode.accent, '#ffd93d', '#ffffff'], 6);
-          screenShake = Math.max(screenShake, 6);
-        }
-      }
+      if (!p.scored && p.x + PIPE_W < BIRD_X) { p.scored = true; onScore(); }
       if (p.x + PIPE_W < -20) pipes.splice(i, 1);
+    }
+    for (let i = lasers.length - 1; i >= 0; i--) {
+      const l = lasers[i];
+      l.x -= sp * dt;
+      l.blink += dt / 60;
+      if (!l.scored && l.x + LASER_W < BIRD_X) { l.scored = true; onScore(); }
+      if (l.x + LASER_W < -20) lasers.splice(i, 1);
     }
 
     // coins
     for (let i = coins.length - 1; i >= 0; i--) {
       const c = coins[i];
-      if (!c.pipe || c.pipe.x + PIPE_W < -40) { coins.splice(i, 1); continue; }
+      c.x -= sp * dt;
+      if (c.x < -40) { coins.splice(i, 1); continue; }
       if (c.collected) continue;
       c.spin += 0.2 * dt;
-      const cx = c.pipe.x + PIPE_W / 2;
-      const cy = pipeTop(c.pipe) + c.pipe.gap / 2 + c.offY;
+      const cx = c.x, cy = c.y;
       const dx = cx - BIRD_X, dy = cy - birdY;
       if (dx * dx + dy * dy < (BIRD_R + 11) * (BIRD_R + 11)) {
         c.collected = true;
@@ -668,10 +752,48 @@
     ctx.strokeRect(p.x + 0.5, by + cap, PIPE_W - 1, bodyH - by - cap);
   }
 
+  function drawLaser(l) {
+    const c = laserCenter(l);
+    const top = c - l.gap / 2, bot = c + l.gap / 2;
+    const bodyH = H - GROUND_H;
+    const ph = l.blink % 2.5;
+    // flicker just before it switches off, then a dim idle glow
+    const on = laserOn(l);
+    const intensity = on ? (ph > 1.7 ? 0.4 + 0.6 * Math.abs(Math.sin(l.blink * 40)) : 1) : 0.16;
+    const cx = l.x + LASER_W / 2;
+
+    function beam(y0, y1) {
+      const g = ctx.createLinearGradient(l.x, 0, l.x + LASER_W, 0);
+      g.addColorStop(0, hexA('#ff3c5a', 0.24 * intensity));
+      g.addColorStop(0.5, hexA('#ffd2e6', 0.92 * intensity));
+      g.addColorStop(1, hexA('#ff3c5a', 0.24 * intensity));
+      ctx.fillStyle = g;
+      ctx.fillRect(l.x, y0, LASER_W, y1 - y0);
+      ctx.fillStyle = hexA('#ffffff', 0.86 * intensity);
+      ctx.fillRect(cx - 1.5, y0, 3, y1 - y0);
+    }
+    beam(0, top);
+    beam(bot, bodyH);
+
+    function node(y) {
+      const g = ctx.createRadialGradient(cx, y, 1, cx, y, 16);
+      g.addColorStop(0, hexA('#fff0f5', Math.max(0.5, intensity)));
+      g.addColorStop(0.5, hexA('#ff5078', 0.78 * Math.max(0.4, intensity)));
+      g.addColorStop(1, hexA('#ff5078', 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, y, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3c0c16';
+      rr(l.x - 4, y - 7, LASER_W + 8, 14, 4); ctx.fill();
+      ctx.fillStyle = hexA('#ff5a78', Math.max(0.4, intensity));
+      ctx.beginPath(); ctx.arc(cx, y, 4.5, 0, Math.PI * 2); ctx.fill();
+    }
+    node(top);
+    node(bot);
+  }
+
   function drawCoin(c) {
-    if (c.collected || !c.pipe) return;
-    const cx = c.pipe.x + PIPE_W / 2;
-    const cy = pipeTop(c.pipe) + c.pipe.gap / 2 + c.offY;
+    if (c.collected) return;
+    const cx = c.x, cy = c.y;
     const wob = Math.abs(Math.cos(c.spin)); // fake 3D spin
     ctx.save();
     ctx.translate(cx, cy);
@@ -696,9 +818,12 @@
     ctx.translate(BIRD_X, birdY);
     ctx.rotate(birdRot);
 
-    // glow for night bird
-    if (mode.fog) {
-      ctx.fillStyle = 'rgba(140,224,255,0.35)';
+    const skin = skinById(skinId);
+    const base = skinColor(skin);
+
+    // glow for the night bird and for glowing skins
+    if (mode.fog || skin.glow) {
+      ctx.fillStyle = skin.glow ? hexA(base, 0.4) : 'rgba(140,224,255,0.35)';
       ctx.beginPath(); ctx.arc(0, 0, BIRD_R + 8, 0, Math.PI * 2); ctx.fill();
     }
     // shadow
@@ -706,7 +831,6 @@
     ctx.beginPath(); ctx.ellipse(3, 4, BIRD_R, BIRD_R * 0.9, 0, 0, Math.PI * 2); ctx.fill();
 
     // body
-    const base = mode.birdColor;
     const bg = ctx.createRadialGradient(-5, -5, 2, 0, 0, BIRD_R * 1.5);
     bg.addColorStop(0, lighten(base, 40));
     bg.addColorStop(0.6, base);
@@ -865,7 +989,16 @@
   }
 
   // Menu / mode-select --------------------------------------------------------
-  const cardLayout = MODES.map((m, i) => ({ x: 40, y: 214 + i * 78, w: W - 80, h: 66, mode: m }));
+  // six modes have to fit above the ground, so the cards are tighter than the
+  // five-mode layout was and the coin total moved up to the header
+  const cardLayout = MODES.map((m, i) => ({ x: 40, y: 196 + i * 63, w: W - 80, h: 56, mode: m }));
+  const shopBtn = { x: 40, y: 576, w: W - 80, h: 44 };
+  const shopTiles = SKINS.map((s, i) => ({
+    x: 30 + (i % 2) * ((W - 60 - 16) / 2 + 16),
+    y: 150 + Math.floor(i / 2) * 104,
+    w: (W - 60 - 16) / 2, h: 92, skin: s,
+  }));
+  const shopBackBtn = { x: W / 2 - 80, y: 572, w: 160, h: 44 };
 
   function drawMenu() {
     // title
@@ -875,7 +1008,8 @@
     grad.addColorStop(0, '#ffe27a'); grad.addColorStop(1, '#ff8c3c');
     text('BIRD', W / 2, 150, { size: 52, weight: 900, color: '#fff', shadow: 14 });
     ctx.restore();
-    text('· 多模式增强版 ·', W / 2, 182, { size: 14, weight: 700, color: 'rgba(255,255,255,0.75)' });
+    text('· 多模式增强版 ·', W / 2, 176, { size: 14, weight: 700, color: 'rgba(255,255,255,0.75)' });
+    text('★ ' + lifetimeCoins, W - 24, 40, { size: 16, weight: 800, color: '#ffe27a', align: 'right', shadow: 6 });
 
     // mode cards
     for (let i = 0; i < cardLayout.length; i++) {
@@ -897,23 +1031,128 @@
 
       // icon chip
       ctx.save();
-      rr(c.x + 12, c.y + 12, 42, 42, 12);
+      rr(c.x + 10, c.y + 9, 38, 38, 11);
       ctx.fillStyle = hexA(m.accent, 0.22); ctx.fill();
       ctx.restore();
-      text(m.icon, c.x + 33, c.y + 40, { size: 24, baseline: 'middle' });
+      text(m.icon, c.x + 29, c.y + 30, { size: 21, baseline: 'middle' });
 
-      text(m.name, c.x + 66, c.y + 27, { size: 18, weight: 800, color: sel ? m.accent : '#fff', align: 'left', baseline: 'middle' });
-      text(m.desc, c.x + 66, c.y + 48, { size: 12.5, weight: 500, color: 'rgba(255,255,255,0.72)', align: 'left', baseline: 'middle' });
+      text(m.name, c.x + 58, c.y + 22, { size: 17, weight: 800, color: sel ? m.accent : '#fff', align: 'left', baseline: 'middle' });
+      text(m.desc, c.x + 58, c.y + 41, { size: 12, weight: 500, color: 'rgba(255,255,255,0.72)', align: 'left', baseline: 'middle' });
 
       // best badge
-      text('最佳', c.x + c.w - 58, c.y + 24, { size: 11, weight: 600, color: 'rgba(255,255,255,0.5)', align: 'left', baseline: 'middle' });
-      text(String(best), c.x + c.w - 58, c.y + 44, { size: 20, weight: 900, color: '#fff', align: 'left', baseline: 'middle' });
+      text('最佳', c.x + c.w - 54, c.y + 20, { size: 10.5, weight: 600, color: 'rgba(255,255,255,0.5)', align: 'left', baseline: 'middle' });
+      text(String(best), c.x + c.w - 54, c.y + 39, { size: 18, weight: 900, color: '#fff', align: 'left', baseline: 'middle' });
     }
 
-    // footer: lifetime coins + hint
-    text('★ 累计金币 ' + lifetimeCoins, W / 2, H - GROUND_H - 26, { size: 15, weight: 800, color: '#ffe27a', shadow: 6 });
+    // shop entry
+    ctx.save();
+    rr(shopBtn.x, shopBtn.y, shopBtn.w, shopBtn.h, 14);
+    ctx.fillStyle = hexA('#ffe27a', 0.16); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = hexA('#ffe27a', 0.8); ctx.stroke();
+    ctx.restore();
+    text('🛒 皮肤商店', W / 2, shopBtn.y + 28, { size: 17, weight: 800, color: '#ffe27a' });
+
     const a = 0.5 + 0.5 * Math.sin(tGlobal * 4);
-    text('点击卡片开始 · ↑↓ 选择 · 空格确认', W / 2, H - 30, { size: 13, weight: 700, color: 'rgba(255,255,255,0.8)', alpha: a });
+    text('点击卡片开始 · ↑↓ 选择 · 空格确认 · B 进商店', W / 2, H - 30, { size: 13, weight: 700, color: 'rgba(255,255,255,0.8)', alpha: a });
+  }
+
+  function drawShop() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(14,16,34,0.82)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    text('皮肤商店', W / 2, 62, { size: 30, weight: 900, color: '#fff', shadow: 10 });
+    text('金币余额', 24, 106, { size: 13, weight: 600, color: 'rgba(255,255,255,0.6)', align: 'left' });
+    text('★ ' + lifetimeCoins, W - 24, 106, { size: 17, weight: 800, color: '#ffe27a', align: 'right', shadow: 6 });
+
+    for (let i = 0; i < shopTiles.length; i++) {
+      const t = shopTiles[i];
+      const s = t.skin;
+      const owned = ownedSkins.indexOf(s.id) >= 0;
+      const equipped = s.id === skinId;
+      const sel = i === shopIndex;
+
+      ctx.save();
+      rr(t.x, t.y, t.w, t.h, 14);
+      ctx.fillStyle = equipped ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)';
+      ctx.fill();
+      ctx.lineWidth = (equipped || sel) ? 2.4 : 1.2;
+      ctx.strokeStyle = equipped ? '#7ee8b0' : sel ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.18)';
+      ctx.stroke();
+      ctx.restore();
+
+      drawBirdIcon(t.x + t.w / 2, t.y + 32, 17, s);
+      text(s.name, t.x + t.w / 2, t.y + 62, { size: 14, weight: 800, color: '#fff' });
+
+      let status, col;
+      if (equipped) { status = '已装备'; col = '#7ee8b0'; }
+      else if (owned) { status = '点击装备'; col = 'rgba(255,255,255,0.8)'; }
+      else if (lifetimeCoins >= s.cost) { status = '★ ' + s.cost; col = '#ffe27a'; }
+      else { status = '★ ' + s.cost; col = 'rgba(255,255,255,0.4)'; }
+      text(status, t.x + t.w / 2, t.y + 80, { size: 12.5, weight: 700, color: col });
+    }
+
+    if (shopMsgLife > 0) {
+      text(shopMsg, W / 2, 132, {   // above the tiles: the bottom row reaches y=554
+        size: 15, weight: 800, color: '#ffd93d', shadow: 6,
+        alpha: Math.min(1, shopMsgLife),
+      });
+    }
+
+    ctx.save();
+    rr(shopBackBtn.x, shopBackBtn.y, shopBackBtn.w, shopBackBtn.h, 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.stroke();
+    ctx.restore();
+    text('← 返回菜单', W / 2, shopBackBtn.y + 28, { size: 16, weight: 800, color: '#fff' });
+  }
+
+  // a small static bird for the shop tiles
+  function drawBirdIcon(cx, cy, r, skin) {
+    const base = skinColor(skin);
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (skin.glow) {
+      ctx.fillStyle = hexA(base, 0.35);
+      ctx.beginPath(); ctx.arc(0, 0, r + 6, 0, Math.PI * 2); ctx.fill();
+    }
+    const bg = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 2, 0, 0, r * 1.5);
+    bg.addColorStop(0, lighten(base, 40));
+    bg.addColorStop(0.6, base);
+    bg.addColorStop(1, darken(base, 30));
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.ellipse(-r * 0.12, r * 0.28, r * 0.6, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    // beak
+    ctx.fillStyle = '#ff9a3c';
+    ctx.beginPath();
+    ctx.moveTo(r - r * 0.2, -r * 0.28); ctx.lineTo(r + r * 0.7, r * 0.06); ctx.lineTo(r - r * 0.2, r * 0.4);
+    ctx.closePath(); ctx.fill();
+    // eye
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(r * 0.4, -r * 0.3, r * 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a1a24';
+    ctx.beginPath(); ctx.arc(r * 0.52, -r * 0.3, r * 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function purchaseOrEquip(i) {
+    const s = SKINS[i];
+    if (ownedSkins.indexOf(s.id) >= 0) {
+      skinId = s.id; saveSkins(); sfx.select();
+    } else if (lifetimeCoins >= s.cost) {
+      spendCoins(s.cost);
+      ownedSkins.push(s.id);
+      skinId = s.id;
+      saveSkins();
+      shopMsg = '已购买 ' + s.name + '！'; shopMsgLife = 1.6;
+      sfx.coin();
+    } else {
+      shopMsg = '金币不足'; shopMsgLife = 1.6;
+      sfx.hit();
+    }
   }
 
   function drawPause() {
@@ -994,6 +1233,17 @@
   // ==========================================================================
   //  Color utilities
   // ==========================================================================
+  // The rainbow skin cycles through hues, but lighten/darken/hexA only take
+  // hex, so convert rather than returning an hsl() string.
+  function skinColor(skin) {
+    if (!skin.rainbow) return skin.color;
+    const h = (tGlobal * 0.15) % 1, s = 0.68, v = 1;
+    const i = Math.floor(h * 6), f = h * 6 - i;
+    const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    const rgb = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6];
+    return '#' + rgb.map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
+  }
+
   function hexToRgb(hex) {
     hex = hex.replace('#', '');
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
@@ -1026,10 +1276,11 @@
 
     drawSky();
     for (const p of pipes) drawPipe(p);
+    for (const l of lasers) drawLaser(l);
     for (const c of coins) drawCoin(c);
     drawGround();
     drawParticles();
-    if (state !== STATE.MENU) drawBird();  // menu has its own mascot; keep cards clean
+    if (state !== STATE.MENU && state !== STATE.SHOP) drawBird();
     drawFloaters();
 
     if (mode.fog && (state === STATE.PLAYING || state === STATE.PAUSED || state === STATE.OVER || state === STATE.READY)) {
@@ -1043,6 +1294,7 @@
     }
 
     if (state === STATE.MENU) drawMenu();
+    else if (state === STATE.SHOP) drawShop();
     else {
       if (state === STATE.PLAYING || state === STATE.PAUSED || state === STATE.OVER) drawHUD();
       if (state === STATE.READY) drawReady();
@@ -1100,6 +1352,17 @@
           menuIndex = i; startMode(MODES[i]); return;
         }
       }
+      if (inRect(x, y, shopBtn)) { state = STATE.SHOP; sfx.select(); return; }
+      return;
+    }
+    if (state === STATE.SHOP) {
+      if (inRect(x, y, shopBackBtn)) { state = STATE.MENU; sfx.select(); return; }
+      for (let i = 0; i < shopTiles.length; i++) {
+        const tile = shopTiles[i];
+        if (x >= tile.x && x <= tile.x + tile.w && y >= tile.y && y <= tile.y + tile.h) {
+          shopIndex = i; purchaseOrEquip(i); return;
+        }
+      }
       return;
     }
     if (state === STATE.OVER) {
@@ -1153,6 +1416,13 @@
       if (NAV_UP.includes(k)) { menuIndex = (menuIndex - 1 + MODES.length) % MODES.length; sfx.select(); e.preventDefault(); }
       else if (NAV_DOWN.includes(k)) { menuIndex = (menuIndex + 1) % MODES.length; sfx.select(); e.preventDefault(); }
       else if (CONFIRM.includes(k)) { startMode(MODES[menuIndex]); e.preventDefault(); }
+      else if (k === 'KeyB') { state = STATE.SHOP; sfx.select(); e.preventDefault(); }
+      return;
+    }
+    if (state === STATE.SHOP) {
+      if (NAV_UP.includes(k)) { shopIndex = (shopIndex - 1 + SKINS.length) % SKINS.length; sfx.select(); e.preventDefault(); }
+      else if (NAV_DOWN.includes(k)) { shopIndex = (shopIndex + 1) % SKINS.length; sfx.select(); e.preventDefault(); }
+      else if (CONFIRM.includes(k)) { purchaseOrEquip(shopIndex); e.preventDefault(); }
       return;
     }
     if (state === STATE.PAUSED) {
