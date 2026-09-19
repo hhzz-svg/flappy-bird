@@ -64,12 +64,35 @@ jobs:
 
           index = Path("site/index.html")
           html = index.read_text(encoding="utf-8")
+          if "</head>" not in html:
+              raise SystemExit("Generated Qt HTML has no closing head tag")
+
           favicon = '    <link rel="icon" href="favicon.svg" type="image/svg+xml">\n'
           if favicon not in html:
-              if "</head>" not in html:
-                  raise SystemExit("Generated Qt HTML has no closing head tag")
               html = html.replace("</head>", favicon + "</head>", 1)
-              index.write_text(html, encoding="utf-8")
+
+          # Qt's shell ships no viewport tag, so phones lay the page out at a
+          # ~980px virtual width and scale it down.
+          viewport = '    <meta name="viewport" content="width=device-width, initial-scale=1">\n'
+          if "name=\"viewport\"" not in html:
+              html = html.replace("</head>", viewport + "</head>", 1)
+
+          # Qt WebAssembly rasterises QWidget content in software, which phone
+          # CPUs cannot keep up with. Touch devices get the native-canvas build
+          # instead; ?qt=1 overrides that.
+          redirect = """    <script>
+      (function () {
+        if (/[?&]qt=1/.test(location.search)) return;
+        var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+        var small = Math.min(screen.width, screen.height) < 820;
+        if (coarse && small) location.replace('enhanced.html');
+      })();
+    </script>
+"""
+          if "enhanced.html" not in html:
+              html = html.replace("</head>", redirect + "</head>", 1)
+
+          index.write_text(html, encoding="utf-8")
           PY
           touch site/.nojekyll
           test -s site/index.html
@@ -81,6 +104,8 @@ jobs:
           test -s site/favicon.svg
           test -s site/favicon.ico
           grep -F 'rel="icon" href="favicon.svg" type="image/svg+xml"' site/index.html
+          grep -F 'name="viewport"' site/index.html
+          grep -F "location.replace('enhanced.html')" site/index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
