@@ -474,3 +474,26 @@
 - `progress.md`：追加本轮记录。
 - 手机分流至此没有功能损失：网页版模式数与皮肤商店已与 Qt 版对齐。
 - 回滚方式：执行 `git revert (git log --grep='^feat: add laser mode and the skin shop to the web build$' -1 --format='%H')`。
+
+## 2026-09-19 - Task: 修复部署工作流的 YAML 缩进
+
+### What was done
+
+- 定位根因：`.github/workflows/deploy-pages.yml` 中注入分流脚本的片段写成 Python 三引号字符串，字符串内部各行缩进为 0／4／6 列，低于 `run: |` 块标量要求的 10 列，YAML 在那里即认为块结束，整个工作流加载失败。
+- 后果：run 11／12／13 三次推送到 main 的部署都在几秒内失败，手机分流与激光模式、皮肤商店从未真正上线；失败发生在工作流加载阶段，PR 上看不到任何 check。
+- 改法：片段改为逐行拼接的字符串列表，每行字面量自带缩进，整段留在块标量内部；同时把上一行的 `"name=\"viewport\""` 统一为单引号写法，与周围一致。
+
+### Testing
+
+- 以 `yaml.safe_load` 按 Actions 的方式解析工作流，再从解析后的步骤中取出注入脚本实际执行：断言 viewport、分流脚本与 favicon 均注入成功、`</head>` 仍然闭合、重复执行不会重复注入，并确认步骤自身的 `grep` 断言覆盖了这些标记，12 项全部通过。
+- 路由测试改为直接驱动上述产出的 `site/index.html`，不再自行复制片段，杜绝测试与实际部署内容脱节，7 项全部通过。
+- 线上确认：run 14 的 build 与 deploy 两个 job 均为 success。「Stage and validate site」在 `bash -e` 下以三条 `grep -F` 收尾，任一未命中该步即失败，故该步成功即证明三处注入都已进入线上 `index.html`。
+
+### Notes
+
+- `.github/workflows/deploy-pages.yml`：修复块标量缩进。
+- `progress.md`：追加本轮记录。
+- 教训：改动工作流必须先在本地做一次 YAML 解析校验，否则失败发生在工作流加载阶段，不会体现为任何 check。
+- 失败运行的识别特征：Actions 列表中 run 12／13 的名称显示为 `.github/workflows/deploy-pages.yml`（文件路径）而非 `Deploy Qt WebAssembly to GitHub Pages`，这正是工作流解析失败时的兜底显示。
+- job 原始日志未能获取：下载链接指向 Azure blob，本会话网络策略以 403 CONNECT 拒绝，未绕过。
+- 回滚方式：执行 `git revert (git log --grep="^fix: repair the deploy workflow's block scalar$" -1 --format='%H')`。
